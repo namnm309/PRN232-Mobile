@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as AuthSession from 'expo-auth-session';
 import { useRouter } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -10,6 +11,9 @@ import {
   UserDto,
   VerifyOtpRequest,
 } from '@/lib/api';
+
+const GOOGLE_CLIENT_ID =
+  '869531482598-t4c2ufqbq0sl42m97eqd7dg5e5vjb7m3.apps.googleusercontent.com';
 
 const TOKEN_KEY = '@nongxanh:token';
 const USER_KEY = '@nongxanh:user';
@@ -118,25 +122,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithGoogle = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true }));
     try {
-      const { authorizationUrl, state: oauthState } = await authApi.googleStart();
-      const webBrowser = await import('expo-web-browser');
-      const result = await webBrowser.openAuthSessionAsync(
-        authorizationUrl,
-        undefined,
-        { showInRecents: true }
-      );
-      if (result.type !== 'success' || !result.url) {
+      // Sử dụng proxy của Expo (auth.expo.io) với project full name @owner/slug
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore projectNameForProxy chưa có trong type định nghĩa nhưng được hỗ trợ runtime
+      const redirectUri = AuthSession.makeRedirectUri({
+        path: 'redirect',
+        projectNameForProxy: '@namnm309/NongXanh',
+      });
+      const nonce = Math.random().toString(36).substring(2);
+
+      const request = new AuthSession.AuthRequest({
+        clientId: GOOGLE_CLIENT_ID,
+        redirectUri,
+        // Google không cho dùng PKCE (code_challenge_method) với flow id_token thuần
+        usePKCE: false,
+        responseType: AuthSession.ResponseType.IdToken,
+        scopes: ['openid', 'email', 'profile'],
+        extraParams: {
+          nonce,
+        },
+      });
+
+      const discovery = {
+        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+      };
+
+      const result = (await request.promptAsync(discovery)) as AuthSession.AuthSessionResult;
+
+      if (result.type !== 'success' || !('params' in result) || !result.params.id_token) {
         setState((s) => ({ ...s, isLoading: false }));
+        if (result.type === 'error' && 'error' in result && result.error) {
+          throw new Error(result.error.message ?? 'Google login failed');
+        }
         return;
       }
-      const url = new URL(result.url);
-      const code = url.searchParams.get('code');
-      const stateParam = url.searchParams.get('state');
-      if (!code || !stateParam || stateParam !== oauthState) {
-        setState((s) => ({ ...s, isLoading: false }));
-        return;
-      }
-      const data = await authApi.googleCallback({ code, state: stateParam });
+
+      const idToken = result.params.id_token;
+      const data = await authApi.googleMobileLogin(idToken);
+
       await persistAuth(data);
       setState((s) => ({ ...s, user: data.user, token: data.accessToken, isLoading: false }));
       router.replace('/(tabs)');

@@ -18,6 +18,17 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'cart.fill': 'shopping-cart',
+  'clock.fill': 'history',
+  'person.fill': 'person',
+  'square.grid.2x2': 'view-module',
+  // Account & support icons trên màn Tài khoản
+  'mappin.and.ellipse': 'location-on',
+  'creditcard.fill': 'credit-card',
+  'bag.fill': 'shopping-bag',
+  'bell.fill': 'notifications',
+  'questionmark.circle.fill': 'help-outline',
+  'doc.text.fill': 'description',
 } as IconMapping;
 
 /**

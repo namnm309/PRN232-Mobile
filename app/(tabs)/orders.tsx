@@ -1,0 +1,387 @@
+import React, { useMemo, useState } from 'react';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+
+import { AppHeader } from '@/components/layout/AppHeader';
+import { ScreenContainer } from '@/components/layout/ScreenContainer';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+type CartItem = {
+  id: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  image: number;
+  weight: string;
+};
+
+const formatPrice = (v: number) => `${v.toLocaleString('vi-VN')}đ`;
+
+const mockCartItems: CartItem[] = [
+  {
+    id: '1',
+    name: 'Rau cải xanh hữu cơ',
+    unitPrice: 25000,
+    quantity: 2,
+    image: require('@/assets/images/splash-icon.png'),
+    weight: '500g',
+  },
+  {
+    id: '2',
+    name: 'Cà chua bi',
+    unitPrice: 35000,
+    quantity: 1,
+    image: require('@/assets/images/splash-icon.png'),
+    weight: '250g',
+  },
+  {
+    id: '3',
+    name: 'Trứng gà sạch',
+    unitPrice: 45000,
+    quantity: 1,
+    image: require('@/assets/images/splash-icon.png'),
+    weight: '10 quả',
+  },
+];
+
+const SHIPPING_FEE = 15000;
+const DISCOUNT = 0;
+
+export default function CartScreen() {
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme ?? 'light'];
+  const [items, setItems] = useState<CartItem[]>(mockCartItems);
+  const [voucherCode, setVoucherCode] = useState('');
+
+  const updateQuantity = (id: string, delta: number) => {
+    setItems((prev) =>
+      prev
+        .map((item) =>
+          item.id === id
+            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
+            : item
+        )
+        .filter((item) => item.quantity > 0)
+    );
+  };
+
+  const { subtotal, total } = useMemo(() => {
+    const sub = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+    const tot = Math.max(0, sub - DISCOUNT + SHIPPING_FEE);
+    return { subtotal: sub, total: tot };
+  }, [items]);
+
+  const renderCartItem = ({ item }: { item: CartItem }) => {
+    const lineTotal = item.unitPrice * item.quantity;
+    return (
+      <View style={[styles.cartItem, { backgroundColor: theme.background }]}>
+        <View style={styles.cartItemImageWrap}>
+          <ExpoImage source={item.image} style={styles.cartItemImage} contentFit="cover" />
+        </View>
+        <View style={styles.cartItemBody}>
+          <Text numberOfLines={2} style={[styles.cartItemName, { color: theme.text }]}>
+            {item.name}
+          </Text>
+          <Text style={styles.cartItemWeight}>{item.weight}</Text>
+          <Text style={[styles.cartItemPrice, { color: theme.primary }]}>
+            {formatPrice(item.unitPrice)}
+          </Text>
+          <View style={styles.quantityRow}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => updateQuantity(item.id, -1)}
+              style={[styles.quantityBtn, { borderColor: theme.primary }]}>
+              <MaterialIcons name="remove" size={18} color={theme.primary} />
+            </TouchableOpacity>
+            <Text style={[styles.quantityText, { color: theme.text }]}>{item.quantity}</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => updateQuantity(item.id, 1)}
+              style={[styles.quantityBtn, { borderColor: theme.primary, backgroundColor: theme.primary }]}>
+              <MaterialIcons name="add" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <Text style={[styles.cartItemTotal, { color: theme.primary }]}>
+          {formatPrice(lineTotal)}
+        </Text>
+      </View>
+    );
+  };
+
+  return (
+    <ScreenContainer scroll={false}>
+      <AppHeader title="Giỏ hàng" subtitle="Xem và chỉnh sửa sản phẩm" />
+
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        renderItem={renderCartItem}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <MaterialIcons name="shopping-cart" size={48} color="#9ca3af" />
+            <Text style={styles.emptyText}>Giỏ hàng trống</Text>
+          </View>
+        }
+        ListFooterComponent={
+          <>
+            <View style={[styles.voucherRow, { borderColor: '#e5e7eb' }]}>
+              <TextInput
+                value={voucherCode}
+                onChangeText={setVoucherCode}
+                placeholder="Nhập mã giảm giá"
+                placeholderTextColor="#9ca3af"
+                style={[styles.voucherInput, { color: theme.text }]}
+              />
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.voucherBtn, { backgroundColor: theme.primary }]}>
+                <Text style={styles.voucherBtnText}>Áp dụng</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.summaryBox, { backgroundColor: theme.background, borderColor: '#e5e7eb' }]}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Tạm tính</Text>
+                <Text style={[styles.summaryValue, { color: theme.text }]}>
+                  {formatPrice(subtotal)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Giảm giá</Text>
+                <Text style={[styles.summaryValue, { color: theme.text }]}>
+                  -{formatPrice(DISCOUNT)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Phí giao hàng</Text>
+                <Text style={[styles.summaryValue, { color: theme.text }]}>
+                  {formatPrice(SHIPPING_FEE)}
+                </Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowTotal]}>
+                <Text style={styles.summaryLabelTotal}>Tổng cộng</Text>
+                <Text style={[styles.summaryValueTotal, { color: theme.primary }]}>
+                  {formatPrice(total)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.bottomSpacer} />
+          </>
+        }
+      />
+
+      {items.length > 0 && (
+        <View style={[styles.bottomBar, { backgroundColor: theme.background }]}>
+          <View style={styles.bottomBarLeft}>
+            <Text style={styles.bottomBarLabel}>Tổng thanh toán</Text>
+            <Text style={[styles.bottomBarTotal, { color: theme.primary }]}>
+              {formatPrice(total)}
+            </Text>
+            <Text style={styles.bottomBarNote}>Đã bao gồm VAT</Text>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={[styles.checkoutBtn, { backgroundColor: theme.primary }]}>
+            <Text style={styles.checkoutBtnText}>Đặt hàng</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </ScreenContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  listContent: {
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  separator: {
+    height: 12,
+  },
+  cartItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cartItemImageWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  cartItemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cartItemBody: {
+    flex: 1,
+  },
+  cartItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  cartItemWeight: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  cartItemPrice: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  cartItemTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: '#6b7280',
+    marginTop: 12,
+  },
+  voucherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  voucherInput: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
+  voucherBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  voucherBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  summaryBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  summaryRowTotal: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+    marginTop: 6,
+    paddingTop: 10,
+  },
+  summaryLabelTotal: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#11181C',
+  },
+  summaryValueTotal: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bottomSpacer: {
+    height: 100,
+  },
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e5e7eb',
+  },
+  bottomBarLeft: {},
+  bottomBarLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  bottomBarTotal: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  bottomBarNote: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  checkoutBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+  },
+  checkoutBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+});

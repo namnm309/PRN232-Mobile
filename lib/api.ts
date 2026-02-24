@@ -38,7 +38,8 @@ export type GoogleOAuthStartResponse = {
   state: string;
 };
 
-export type GoogleOAuthCallbackRequest = { code: string; state: string };
+export type GoogleOAuthCallbackRequest = { code: string; state: string; redirectUri?: string };
+export type GoogleMobileLoginRequest = { idToken: string };
 
 async function request<T>(
   url: string,
@@ -85,12 +86,10 @@ export const authApi = {
       body: JSON.stringify({ email }),
     }),
 
-  googleStart: () => request<GoogleOAuthStartResponse>(getAuthUrl('/google/start'), { method: 'GET' }),
-
-  googleCallback: (body: GoogleOAuthCallbackRequest) =>
-    request<AuthResponse>(getAuthUrl('/google/callback'), {
+  googleMobileLogin: (idToken: string) =>
+    request<AuthResponse>(getAuthUrl('/google/mobile'), {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ idToken } satisfies GoogleMobileLoginRequest),
     }),
 };
 

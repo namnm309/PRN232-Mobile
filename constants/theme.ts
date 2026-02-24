@@ -5,9 +5,6 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
-
 /** Nông Xanh primary green (Figma) */
 export const AuthColors = {
   primary: '#22c55e',
@@ -21,17 +18,22 @@ export const AuthColors = {
   dividerText: '#6b7280',
 };
 
+const tintColorLight = AuthColors.primary;
+const tintColorDark = '#ffffff';
+
 export const Colors = {
   light: {
     text: '#11181C',
-    background: '#fff',
+    background: '#ffffff',
     tint: tintColorLight,
     icon: '#687076',
-    tabIconDefault: '#687076',
+    tabIconDefault: '#9ca3af',
     tabIconSelected: tintColorLight,
     /** Auth / Nông Xanh primary */
     primary: AuthColors.primary,
     primaryLight: AuthColors.primaryLight,
+    accent: '#15803d',
+    tabInactive: '#9ca3af',
   },
   dark: {
     text: '#ECEDEE',
@@ -42,6 +44,8 @@ export const Colors = {
     tabIconSelected: tintColorDark,
     primary: AuthColors.primaryDark,
     primaryLight: AuthColors.primary,
+    accent: '#16a34a',
+    tabInactive: '#4b5563',
   },
 };
 
