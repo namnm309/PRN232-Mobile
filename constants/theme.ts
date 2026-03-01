@@ -31,9 +31,11 @@ export const Colors = {
     tabIconSelected: tintColorLight,
     /** Auth / Nông Xanh primary */
     primary: AuthColors.primary,
-    primaryLight: AuthColors.primaryLight,
+    primaryLight: '#e8f5e9',
     accent: '#15803d',
     tabInactive: '#9ca3af',
+    border: '#e0e0e0',
+    textSecondary: '#9e9e9e',
   },
   dark: {
     text: '#ECEDEE',
@@ -43,9 +45,11 @@ export const Colors = {
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
     primary: AuthColors.primaryDark,
-    primaryLight: AuthColors.primary,
+    primaryLight: '#1f3a29',
     accent: '#16a34a',
     tabInactive: '#4b5563',
+    border: '#374151',
+    textSecondary: '#6b7280',
   },
 };
 

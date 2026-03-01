@@ -93,10 +93,10 @@ export const authApi = {
     }),
 };
 
-/** For authenticated requests later */
+/** For authenticated or anonymous requests */
 export async function authenticatedRequest<T>(
   path: string,
-  options: RequestInit & { token: string }
+  options: RequestInit & { token?: string }
 ): Promise<T> {
   const url = path.startsWith('http') ? path : `${config.apiBaseUrl}${path}`;
   return request<T>(url, { ...options, token: options.token });
