@@ -22,6 +22,7 @@ export type Product = {
   createdAt: string;
   updatedAt: string | null;
   categoryId: string | null; // Changed from number to string (GUID)
+  categoryName?: string | null; // API trả về categoryName ở root
   category?: Category | null; // Optional category object
   providerId: string | null; // Changed from number to string (GUID)
   provider?: Provider | null; // Optional provider object

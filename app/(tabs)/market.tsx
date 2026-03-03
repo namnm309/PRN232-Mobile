@@ -28,19 +28,30 @@ import { config } from '@/lib/config';
 
 const PLACEHOLDER_IMAGE = require('@/assets/images/splash-icon.png');
 
-/** Map main category id to keywords to match Product.category?.categoryName */
+/** Lấy categoryName từ product (API trả về categoryName ở root hoặc trong category) */
+function getProductCategoryName(p: { categoryName?: string | null; category?: { categoryName?: string | null } | null }): string | null {
+  return p.categoryName ?? p.category?.categoryName ?? null;
+}
+
+/**
+ * Map danh mục app -> tên category từ backend.
+ * Backend hiện có: Rau củ, Trái cây, Thảo mộc & Gia vị, Nấm tươi.
+ * Hải sản, Thịt & Trứng, Đồ khô chưa có trong backend -> trả về rỗng.
+ */
+const CATEGORY_NAME_MAP: Record<string, string[]> = {
+  vegetable: ['rau củ', 'rau ăn lá', 'củ quả', 'nấm tươi'],
+  fruit: ['trái cây', 'trái cây nhiệt đới', 'trái cây ôn đới'],
+  meat_egg: [], // backend chưa có
+  seafood: [],  // backend chưa có
+  dry: ['thảo mộc & gia vị', 'rau gia vị'],
+};
+
 function matchCategory(catId: string, categoryName: string | null | undefined): boolean {
   if (!categoryName) return false;
-  const lower = categoryName.toLowerCase();
-  const maps: Record<string, string[]> = {
-    vegetable: ['rau', 'vegetable'],
-    fruit: ['trái', 'fruit', 'quả', 'trai cay'],
-    meat_egg: ['thịt', 'trứng', 'meat', 'egg'],
-    seafood: ['hải', 'cá', 'tôm', 'seafood', 'fish', 'shrimp'],
-    dry: ['khô', 'đậu', 'gạo', 'đồ khô', 'dry', 'grain', 'bean'],
-  };
-  const keywords = maps[catId] ?? [];
-  return keywords.some((k) => lower.includes(k));
+  const lower = categoryName.toLowerCase().trim();
+  const allowed = CATEGORY_NAME_MAP[catId] ?? [];
+  if (allowed.length === 0) return false;
+  return allowed.some((name) => lower === name || lower.startsWith(name) || name.startsWith(lower));
 }
 
 const MAIN_CATEGORIES = [
@@ -136,7 +147,7 @@ export default function MarketScreen() {
 
   const productsInCategory = useMemo(() => {
     return products.filter((p) =>
-      matchCategory(selectedCategoryId, p.category?.categoryName)
+      matchCategory(selectedCategoryId, getProductCategoryName(p))
     );
   }, [products, selectedCategoryId]);
 
@@ -167,7 +178,7 @@ export default function MarketScreen() {
     });
   };
 
-  // Khi category không khớp sản phẩm từ API, hiển thị tất cả sản phẩm (đã lọc search)
+  // Khi category không có sản phẩm: chỉ filter theo search, KHÔNG fallback hiển thị tất cả
   const displayProducts =
     productsInCategory.length > 0
       ? filteredProducts
@@ -175,7 +186,7 @@ export default function MarketScreen() {
         ? products.filter((p) =>
             p.productName.toLowerCase().includes(search.trim().toLowerCase())
           )
-        : products;
+        : []; // Danh mục không có sản phẩm -> hiển thị trống
 
   return (
     <ScreenContainer scroll={false}>
@@ -319,7 +330,9 @@ export default function MarketScreen() {
                 })}
                 {displayProducts.length === 0 && (
                   <Text style={styles.emptyGridText}>
-                    Không có sản phẩm phù hợp.
+                    {productsInCategory.length === 0 && !search.trim()
+                      ? `Chưa có sản phẩm trong danh mục ${selectedCategory.label}.`
+                      : 'Không có sản phẩm phù hợp.'}
                   </Text>
                 )}
               </View>
