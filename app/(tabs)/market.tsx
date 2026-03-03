@@ -1,6 +1,7 @@
-import { useRouter } from 'expo-router';
-import React from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,9 +12,36 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
+import { ProductCard } from '@/components/ui/ProductCard';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  getProducts,
+  mapProductToCardData,
+  getPrimaryImageUrl,
+  type Product,
+} from '@/lib/productsApi';
+import { config } from '@/lib/config';
+
+const PLACEHOLDER_IMAGE = require('@/assets/images/splash-icon.png');
+
+/** Map main category id to keywords to match Product.category?.categoryName */
+function matchCategory(catId: string, categoryName: string | null | undefined): boolean {
+  if (!categoryName) return false;
+  const lower = categoryName.toLowerCase();
+  const maps: Record<string, string[]> = {
+    vegetable: ['rau', 'vegetable'],
+    fruit: ['trái', 'fruit', 'quả', 'trai cay'],
+    meat_egg: ['thịt', 'trứng', 'meat', 'egg'],
+    seafood: ['hải', 'cá', 'tôm', 'seafood', 'fish', 'shrimp'],
+    dry: ['khô', 'đậu', 'gạo', 'đồ khô', 'dry', 'grain', 'bean'],
+  };
+  const keywords = maps[catId] ?? [];
+  return keywords.some((k) => lower.includes(k));
+}
 
 const MAIN_CATEGORIES = [
   { id: 'vegetable', label: 'Rau củ', icon: 'spa' as const, heading: 'Rau củ tươi' },
@@ -63,9 +91,16 @@ const SUB_CATEGORIES: Record<
 
 export default function MarketScreen() {
   const router = useRouter();
-  const [search, setSearch] = React.useState('');
-  const [selectedCategoryId, setSelectedCategoryId] =
-    React.useState<(typeof MAIN_CATEGORIES)[number]['id']>('vegetable');
+  const params = useLocalSearchParams<{ category?: string }>();
+  const { count, addItem } = useCart();
+  const { token } = useAuth();
+  const [search, setSearch] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<
+    (typeof MAIN_CATEGORIES)[number]['id']
+  >((params.category as (typeof MAIN_CATEGORIES)[number]['id']) || 'vegetable');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
@@ -73,10 +108,74 @@ export default function MarketScreen() {
   const selectedCategory =
     MAIN_CATEGORIES.find((c) => c.id === selectedCategoryId) ?? MAIN_CATEGORIES[0];
 
-  const subCategories = SUB_CATEGORIES[selectedCategory.id] ?? [];
-  const filteredSubCategories = subCategories.filter((item) =>
-    item.label.toLowerCase().includes(search.trim().toLowerCase())
-  );
+  useEffect(() => {
+    if (params.category && MAIN_CATEGORIES.some((c) => c.id === params.category)) {
+      setSelectedCategoryId(params.category as (typeof MAIN_CATEGORIES)[number]['id']);
+    }
+  }, [params.category]);
+
+  useEffect(() => {
+    async function fetchProducts() {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await getProducts(token || undefined, 1, 100);
+        if (res.success && res.data) {
+          setProducts(res.data.items);
+        } else {
+          setError(res.message || 'Không thể tải sản phẩm');
+        }
+      } catch (err) {
+        setError('Có lỗi xảy ra khi tải sản phẩm');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProducts();
+  }, [token]);
+
+  const productsInCategory = useMemo(() => {
+    return products.filter((p) =>
+      matchCategory(selectedCategoryId, p.category?.categoryName)
+    );
+  }, [products, selectedCategoryId]);
+
+  const filteredProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return productsInCategory;
+    return productsInCategory.filter((p) =>
+      p.productName.toLowerCase().includes(q)
+    );
+  }, [productsInCategory, search]);
+
+  const handleAddToCart = (product: Product) => {
+    const imageUrl = getPrimaryImageUrl(product.productImages);
+    const imageSource = imageUrl
+      ? {
+          uri: imageUrl.startsWith('http')
+            ? imageUrl
+            : `${config.apiBaseUrl}${imageUrl}`,
+        }
+      : PLACEHOLDER_IMAGE;
+    addItem({
+      id: product.productId,
+      productId: product.productId,
+      name: product.productName,
+      unitPrice: product.basePrice,
+      image: imageSource,
+      weight: product.unit || product.origin || undefined,
+    });
+  };
+
+  // Khi category không khớp sản phẩm từ API, hiển thị tất cả sản phẩm (đã lọc search)
+  const displayProducts =
+    productsInCategory.length > 0
+      ? filteredProducts
+      : search.trim()
+        ? products.filter((p) =>
+            p.productName.toLowerCase().includes(search.trim().toLowerCase())
+          )
+        : products;
 
   return (
     <ScreenContainer scroll={false}>
@@ -84,7 +183,7 @@ export default function MarketScreen() {
         title="Danh mục"
         left={
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => router.replace('/(tabs)/')}
             activeOpacity={0.8}
             style={styles.headerIconButton}>
             <View style={styles.headerIconCircle}>
@@ -99,9 +198,13 @@ export default function MarketScreen() {
             style={styles.headerIconButton}>
             <View style={styles.headerIconCircle}>
               <MaterialIcons name="shopping-cart" size={18} color={theme.text} />
-              <View style={[styles.cartBadge, { backgroundColor: theme.primary }]}>
-                <Text style={styles.cartBadgeText}>3</Text>
-              </View>
+              {count > 0 && (
+                <View style={[styles.cartBadge, { backgroundColor: theme.primary }]}>
+                  <Text style={styles.cartBadgeText}>
+                    {count > 99 ? '99+' : count}
+                  </Text>
+                </View>
+              )}
             </View>
           </TouchableOpacity>
         }
@@ -186,19 +289,41 @@ export default function MarketScreen() {
               </View>
             </View>
 
-            <View style={styles.grid}>
-              {filteredSubCategories.map((item) => (
-                <View key={item.id} style={styles.gridItem}>
-                  <View style={styles.gridImagePlaceholder}>
-                    <MaterialIcons name="image" size={26} color="#9ca3af" />
-                  </View>
-                  <Text style={styles.gridLabel}>{item.label}</Text>
-                </View>
-              ))}
-              {filteredSubCategories.length === 0 && (
-                <Text style={styles.emptyGridText}>Không tìm thấy danh mục phù hợp.</Text>
-              )}
-            </View>
+            {loading ? (
+              <View style={styles.loadingWrap}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={[styles.loadingText, { color: theme.text }]}>
+                  Đang tải sản phẩm...
+                </Text>
+              </View>
+            ) : error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : (
+              <View style={styles.grid}>
+                {displayProducts.map((product) => {
+                  const cardData = mapProductToCardData(product);
+                  return (
+                    <View key={product.productId} style={styles.gridItem}>
+                      <ProductCard
+                        name={cardData.name}
+                        price={cardData.price}
+                        weight={cardData.weight}
+                        image={cardData.image}
+                        variant="compact"
+                        showAddButton
+                        onPress={() => {}}
+                        onAddPress={() => handleAddToCart(product)}
+                      />
+                    </View>
+                  );
+                })}
+                {displayProducts.length === 0 && (
+                  <Text style={styles.emptyGridText}>
+                    Không có sản phẩm phù hợp.
+                  </Text>
+                )}
+              </View>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -362,6 +487,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 13,
     color: '#6b7280',
+  },
+  loadingWrap: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 });
 

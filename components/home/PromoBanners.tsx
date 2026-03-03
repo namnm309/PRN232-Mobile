@@ -1,11 +1,16 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export function PromoBanners() {
+type PromoBannersProps = {
+  onPrimaryPress?: () => void;
+  onSecondaryPress?: () => void;
+};
+
+export function PromoBanners({ onPrimaryPress, onSecondaryPress }: PromoBannersProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
@@ -21,9 +26,12 @@ export function PromoBanners() {
         </View>
         <Text style={styles.leftTitle}>Rau Xanh Tươi Ngon</Text>
         <Text style={styles.leftSubtitle}>Giảm 20% cho đơn đầu tiên</Text>
-        <View style={[styles.primaryButton, { backgroundColor: theme.background }]}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onPrimaryPress}
+          style={[styles.primaryButton, { backgroundColor: theme.background }]}>
           <Text style={[styles.primaryButtonText, { color: theme.primary }]}>Mua Ngay</Text>
-        </View>
+        </TouchableOpacity>
       </LinearGradient>
 
       <View style={styles.rightBanner}>
@@ -31,9 +39,12 @@ export function PromoBanners() {
           <Text style={styles.freePillText}>FREE</Text>
         </View>
         <Text style={styles.rightTitle}>Trái Cây Tươi</Text>
-        <View style={[styles.secondaryButton, { borderColor: theme.primary }]}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onSecondaryPress}
+          style={[styles.secondaryButton, { borderColor: theme.primary }]}>
           <Text style={[styles.secondaryButtonText, { color: theme.primary }]}>Khám Phá</Text>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );

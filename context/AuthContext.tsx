@@ -11,6 +11,7 @@ import {
   UserDto,
   VerifyOtpRequest,
 } from '@/lib/api';
+import { updateUserMe, extractUser, type UpdateUserRequest } from '@/lib/userApi';
 
 const GOOGLE_CLIENT_ID =
   '869531482598-t4c2ufqbq0sl42m97eqd7dg5e5vjb7m3.apps.googleusercontent.com';
@@ -31,6 +32,8 @@ type AuthContextValue = AuthState & {
   verifyOtp: (body: VerifyOtpRequest) => Promise<void>;
   logout: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  updateUser: (body: UpdateUserRequest) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -119,6 +122,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace('/(auth)/login');
   }, [router]);
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      const { token } = state;
+      if (!token) throw new Error('Chưa đăng nhập');
+      await authApi.changePassword(currentPassword, newPassword, token);
+    },
+    [state.token]
+  );
+
+  const updateUser = useCallback(async (body: UpdateUserRequest) => {
+    const { token, user } = state;
+    if (!token || !user) throw new Error('Chưa đăng nhập');
+    const res = await updateUserMe(token, body);
+    const updated = extractUser(res);
+    const merged = updated ?? {
+      ...user,
+      displayName: body.displayName ?? user.displayName,
+      phoneNumber: body.phoneNumber ?? user.phoneNumber,
+      email: body.email ?? user.email,
+    };
+    setState((s) => ({ ...s, user: merged }));
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
+  }, [state.token, state.user]);
+
   const loginWithGoogle = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true }));
     try {
@@ -177,8 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyOtp,
       logout,
       loginWithGoogle,
+      updateUser,
+      changePassword,
     }),
-    [state, login, register, verifyOtp, logout, loginWithGoogle]
+    [state, login, register, verifyOtp, logout, loginWithGoogle, updateUser, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

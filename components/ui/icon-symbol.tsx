@@ -29,6 +29,7 @@ const MAPPING = {
   'bell.fill': 'notifications',
   'questionmark.circle.fill': 'help-outline',
   'doc.text.fill': 'description',
+  'gift.fill': 'card-giftcard',
 } as IconMapping;
 
 /**

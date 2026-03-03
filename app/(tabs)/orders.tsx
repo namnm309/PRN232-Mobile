@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -12,100 +13,119 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
+import { useCart, type CartItem } from '@/context/CartContext';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type CartItem = {
-  id: string;
-  name: string;
-  unitPrice: number;
-  quantity: number;
-  image: number;
-  weight: string;
-};
-
 const formatPrice = (v: number) => `${v.toLocaleString('vi-VN')}đ`;
 
-const mockCartItems: CartItem[] = [
-  {
-    id: '1',
-    name: 'Rau cải xanh hữu cơ',
-    unitPrice: 25000,
-    quantity: 2,
-    image: require('@/assets/images/splash-icon.png'),
-    weight: '500g',
-  },
-  {
-    id: '2',
-    name: 'Cà chua bi',
-    unitPrice: 35000,
-    quantity: 1,
-    image: require('@/assets/images/splash-icon.png'),
-    weight: '250g',
-  },
-  {
-    id: '3',
-    name: 'Trứng gà sạch',
-    unitPrice: 45000,
-    quantity: 1,
-    image: require('@/assets/images/splash-icon.png'),
-    weight: '10 quả',
-  },
-];
-
 const SHIPPING_FEE = 15000;
-const DISCOUNT = 0;
+const PLACEHOLDER_IMAGE = require('@/assets/images/splash-icon.png');
+
+import { applyVoucher } from '@/lib/vouchers';
 
 export default function CartScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
-  const [items, setItems] = useState<CartItem[]>(mockCartItems);
+  const {
+    items,
+    updateQuantity,
+    clearCart,
+    subtotal,
+  } = useCart();
   const [voucherCode, setVoucherCode] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [appliedCode, setAppliedCode] = useState<string | null>(null);
 
-  const updateQuantity = (id: string, delta: number) => {
-    setItems((prev) =>
-      prev
-        .map((item) =>
-          item.id === id
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item
-        )
-        .filter((item) => item.quantity > 0)
+  const handleApplyVoucher = () => {
+    const result = applyVoucher(voucherCode, subtotal, SHIPPING_FEE);
+    if (result.success) {
+      setAppliedDiscount(result.discount);
+      setAppliedCode(voucherCode.trim().toUpperCase());
+      Alert.alert('Thành công', result.message);
+    } else {
+      setAppliedDiscount(0);
+      setAppliedCode(null);
+      Alert.alert('Mã không hợp lệ', result.message);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedDiscount(0);
+    setAppliedCode(null);
+    setVoucherCode('');
+  };
+
+  const handleCheckout = () => {
+    if (items.length === 0) return;
+    Alert.alert(
+      'Đặt hàng',
+      'Bạn có chắc muốn đặt hàng? (Chức năng đặt hàng qua API đang phát triển)',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xác nhận',
+          onPress: () => {
+            clearCart();
+            setAppliedDiscount(0);
+            setAppliedCode(null);
+            setVoucherCode('');
+            Alert.alert('Thành công', 'Đơn hàng đã được ghi nhận. Cảm ơn bạn!');
+          },
+        },
+      ]
     );
   };
 
-  const { subtotal, total } = useMemo(() => {
-    const sub = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-    const tot = Math.max(0, sub - DISCOUNT + SHIPPING_FEE);
-    return { subtotal: sub, total: tot };
-  }, [items]);
+  const updateQuantityHandler = (productId: string, delta: number) => {
+    updateQuantity(productId, delta);
+    if (appliedDiscount > 0) {
+      setAppliedDiscount(0);
+      setAppliedCode(null);
+    }
+  };
+
+  const total = useMemo(() => {
+    return Math.max(0, subtotal - appliedDiscount + SHIPPING_FEE);
+  }, [subtotal, appliedDiscount]);
+
+  const getImageSource = (item: CartItem) => {
+    if (typeof item.image === 'object' && item.image?.uri) {
+      return item.image;
+    }
+    return PLACEHOLDER_IMAGE;
+  };
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
     const lineTotal = item.unitPrice * item.quantity;
     return (
       <View style={[styles.cartItem, { backgroundColor: theme.background }]}>
         <View style={styles.cartItemImageWrap}>
-          <ExpoImage source={item.image} style={styles.cartItemImage} contentFit="cover" />
+          <ExpoImage
+            source={getImageSource(item)}
+            style={styles.cartItemImage}
+            contentFit="cover"
+          />
         </View>
         <View style={styles.cartItemBody}>
           <Text numberOfLines={2} style={[styles.cartItemName, { color: theme.text }]}>
             {item.name}
           </Text>
-          <Text style={styles.cartItemWeight}>{item.weight}</Text>
+          <Text style={styles.cartItemWeight}>{item.weight || '—'}</Text>
           <Text style={[styles.cartItemPrice, { color: theme.primary }]}>
             {formatPrice(item.unitPrice)}
           </Text>
           <View style={styles.quantityRow}>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => updateQuantity(item.id, -1)}
+              onPress={() => updateQuantityHandler(item.productId, -1)}
               style={[styles.quantityBtn, { borderColor: theme.primary }]}>
               <MaterialIcons name="remove" size={18} color={theme.primary} />
             </TouchableOpacity>
             <Text style={[styles.quantityText, { color: theme.text }]}>{item.quantity}</Text>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => updateQuantity(item.id, 1)}
+              onPress={() => updateQuantityHandler(item.productId, 1)}
               style={[styles.quantityBtn, { borderColor: theme.primary, backgroundColor: theme.primary }]}>
               <MaterialIcons name="add" size={18} color="#fff" />
             </TouchableOpacity>
@@ -124,7 +144,7 @@ export default function CartScreen() {
 
       <FlatList
         data={items}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.productId}
         renderItem={renderCartItem}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -137,18 +157,40 @@ export default function CartScreen() {
         ListFooterComponent={
           <>
             <View style={[styles.voucherRow, { borderColor: '#e5e7eb' }]}>
-              <TextInput
-                value={voucherCode}
-                onChangeText={setVoucherCode}
-                placeholder="Nhập mã giảm giá"
-                placeholderTextColor="#9ca3af"
-                style={[styles.voucherInput, { color: theme.text }]}
-              />
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={[styles.voucherBtn, { backgroundColor: theme.primary }]}>
-                <Text style={styles.voucherBtnText}>Áp dụng</Text>
-              </TouchableOpacity>
+              {appliedCode ? (
+                <>
+                  <View style={styles.appliedVoucherWrap}>
+                    <Text style={[styles.appliedCode, { color: theme.primary }]}>
+                      {appliedCode}
+                    </Text>
+                    <Text style={styles.appliedDiscount}>
+                      -{formatPrice(appliedDiscount)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleRemoveVoucher}
+                    style={[styles.voucherBtn, { backgroundColor: '#ef4444' }]}>
+                    <Text style={styles.voucherBtnText}>Hủy</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TextInput
+                    value={voucherCode}
+                    onChangeText={setVoucherCode}
+                    placeholder="Nhập mã giảm giá"
+                    placeholderTextColor="#9ca3af"
+                    style={[styles.voucherInput, { color: theme.text }]}
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleApplyVoucher}
+                    style={[styles.voucherBtn, { backgroundColor: theme.primary }]}>
+                    <Text style={styles.voucherBtnText}>Áp dụng</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             <View style={[styles.summaryBox, { backgroundColor: theme.background, borderColor: '#e5e7eb' }]}>
@@ -161,7 +203,7 @@ export default function CartScreen() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Giảm giá</Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>
-                  -{formatPrice(DISCOUNT)}
+                  -{formatPrice(appliedDiscount)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
@@ -194,6 +236,7 @@ export default function CartScreen() {
           </View>
           <TouchableOpacity
             activeOpacity={0.9}
+            onPress={handleCheckout}
             style={[styles.checkoutBtn, { backgroundColor: theme.primary }]}>
             <Text style={styles.checkoutBtnText}>Đặt hàng</Text>
           </TouchableOpacity>
@@ -299,6 +342,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     fontSize: 14,
+  },
+  appliedVoucherWrap: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  appliedCode: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  appliedDiscount: {
+    fontSize: 12,
+    color: '#16a34a',
+    marginTop: 2,
   },
   voucherBtn: {
     paddingVertical: 12,

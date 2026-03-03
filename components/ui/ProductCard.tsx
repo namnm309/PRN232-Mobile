@@ -21,6 +21,8 @@ type ProductCardProps = {
   /** Hiển thị nút thêm (+) hoặc icon giỏ hàng */
   showAddButton?: boolean;
   onPress?: () => void;
+  /** Gọi khi bấm nút thêm vào giỏ (tránh trigger onPress của card) */
+  onAddPress?: () => void;
 };
 
 export function ProductCard({
@@ -35,6 +37,7 @@ export function ProductCard({
   variant = 'default',
   showAddButton,
   onPress,
+  onAddPress,
 }: ProductCardProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
@@ -49,7 +52,7 @@ export function ProductCard({
         styles.card,
         {
           backgroundColor: theme.background,
-          width: isCompact ? '48%' : 150,
+          width: isCompact ? '100%' : 150,
         },
       ]}>
       <View style={[styles.imageWrap, isCompact && styles.imageWrapCompact]}>
@@ -89,6 +92,7 @@ export function ProductCard({
         {showAddButton ? (
           <TouchableOpacity
             activeOpacity={0.8}
+            onPress={() => onAddPress?.()}
             style={[styles.addButton, { backgroundColor: theme.primary }]}>
             <MaterialIcons
               name={isCompact ? 'shopping-cart' : 'add'}

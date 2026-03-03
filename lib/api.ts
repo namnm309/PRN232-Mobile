@@ -58,7 +58,11 @@ async function request<T>(
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = data?.message ?? data?.title ?? `HTTP ${res.status}`;
+    let message = data?.message ?? data?.title ?? `HTTP ${res.status}`;
+    if (res.status === 401) {
+      message =
+        'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng xuất và đăng nhập lại.';
+    }
     throw new Error(Array.isArray(message) ? message.join(', ') : message);
   }
   return data as T;
@@ -90,6 +94,16 @@ export const authApi = {
     request<AuthResponse>(getAuthUrl('/google/mobile'), {
       method: 'POST',
       body: JSON.stringify({ idToken } satisfies GoogleMobileLoginRequest),
+    }),
+
+  changePassword: (currentPassword: string, newPassword: string, token: string) =>
+    request<{ message?: string }>(getAuthUrl('/change-password'), {
+      method: 'POST',
+      token,
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+      }),
     }),
 };
 

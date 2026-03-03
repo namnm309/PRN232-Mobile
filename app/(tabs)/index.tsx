@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ScrollView, StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { HomeHeader } from '@/components/layout/HomeHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
@@ -11,6 +12,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { FilterDropdown } from '@/components/ui/FilterDropdown';
 import { InlineSectionFilter } from '@/components/ui/InlineSectionFilter';
 import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
 import { 
   getProducts, 
   mapProductToCardData, 
@@ -19,14 +21,23 @@ import {
   filterProductsByOrigin,
   filterProductsByProvider,
   selectDefaultOrigin,
-  type Product 
+  type Product,
+  getPrimaryImageUrl,
 } from '@/lib/productsApi';
+import { config } from '@/lib/config';
+import { getDefaultAddress } from '@/lib/addressStorage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useRouter } from 'expo-router';
+
+const PLACEHOLDER_IMAGE = require('@/assets/images/splash-icon.png');
 
 export default function HomeScreen() {
   const [search, setSearch] = useState('');
-  const { token } = useAuth();
+  const [defaultAddress, setDefaultAddress] = useState<string>('Chọn địa chỉ giao hàng');
+  const { token, user } = useAuth();
+  const { addItem } = useCart();
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   
@@ -38,6 +49,18 @@ export default function HomeScreen() {
   // Dropdown selections
   const [selectedOrigin, setSelectedOrigin] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        getDefaultAddress(user.id).then((addr) => {
+          setDefaultAddress(addr?.fullAddress ?? 'Chọn địa chỉ giao hàng');
+        });
+      } else {
+        setDefaultAddress('Chọn địa chỉ giao hàng');
+      }
+    }, [user?.id])
+  );
 
   // Fetch products on mount or when token changes
   useEffect(() => {
@@ -96,15 +119,39 @@ export default function HomeScreen() {
     }
   }, [products, selectedOrigin]);
 
-  // Split products into sections
-  const featuredProducts = products.slice(0, 3);
+  // Search filter
+  const searchLower = search.trim().toLowerCase();
+  const filteredBySearch = useMemo(() => {
+    if (!searchLower) return products;
+    return products.filter((p) =>
+      p.productName.toLowerCase().includes(searchLower)
+    );
+  }, [products, searchLower]);
 
-  // Get unique origins and providers from all products (not just slice)
-  const availableOrigins = useMemo(() => getUniqueOrigins(products), [products]);
-  const availableProviders = useMemo(() => getUniqueProviders(products), [products]);
+  // Split products into sections (sau khi lọc search)
+  const featuredProducts = filteredBySearch.slice(0, 3);
+
+  // Get unique origins and providers from filtered products
+  const availableOrigins = useMemo(() => getUniqueOrigins(filteredBySearch), [filteredBySearch]);
+  const availableProviders = useMemo(() => getUniqueProviders(filteredBySearch), [filteredBySearch]);
 
   // Products for filtering (exclude featured)
-  const productsForFiltering = products.slice(3);
+  const productsForFiltering = filteredBySearch.slice(3);
+
+  const handleAddToCart = (product: Product) => {
+    const imageUrl = getPrimaryImageUrl(product.productImages);
+    const imageSource = imageUrl
+      ? { uri: imageUrl.startsWith('http') ? imageUrl : `${config.apiBaseUrl}${imageUrl}` }
+      : PLACEHOLDER_IMAGE;
+    addItem({
+      id: product.productId,
+      productId: product.productId,
+      name: product.productName,
+      unitPrice: product.basePrice,
+      image: imageSource,
+      weight: product.unit || product.origin || undefined,
+    });
+  };
 
   // Filtered products by origin
   const originFilteredProducts = useMemo(() => {
@@ -133,7 +180,7 @@ export default function HomeScreen() {
 
   return (
     <ScreenContainer>
-      <HomeHeader />
+      <HomeHeader address={defaultAddress} />
 
       <SearchBar
         value={search}
@@ -142,9 +189,12 @@ export default function HomeScreen() {
         showFilter
       />
 
-      <PromoBanners />
+      <PromoBanners
+        onPrimaryPress={() => router.push('/(tabs)/market')}
+        onSecondaryPress={() => router.push('/(tabs)/market')}
+      />
 
-      <CategoryGrid />
+      <CategoryGrid onCategoryPress={(id) => router.push(`/(tabs)/market?category=${id}`)} />
 
       {/* Loading state */}
       {loading && (
@@ -175,7 +225,7 @@ export default function HomeScreen() {
       {/* Featured Products Section */}
       {!loading && !error && featuredProducts.length > 0 && (
         <>
-          <SectionHeader title="Sản phẩm mới" onPressSeeAll={() => {}} />
+          <SectionHeader title="Sản phẩm mới" onPressSeeAll={() => router.push('/(tabs)/market')} />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -192,9 +242,8 @@ export default function HomeScreen() {
                   image={cardData.image}
                   badge={cardData.badge}
                   showAddButton
-                  onPress={() => {
-                    console.log('Product pressed:', cardData.id);
-                  }}
+                  onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                  onAddPress={() => handleAddToCart(product)}
                 />
               );
             })}
@@ -229,7 +278,8 @@ export default function HomeScreen() {
                     weight={cardData.weight}
                     image={cardData.image}
                     showAddButton
-                    onPress={() => console.log('Product pressed:', cardData.id)}
+                    onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                    onAddPress={() => handleAddToCart(product)}
                   />
                 );
               })}
@@ -265,7 +315,8 @@ export default function HomeScreen() {
                     weight={cardData.weight}
                     image={cardData.image}
                     showAddButton
-                    onPress={() => console.log('Product pressed:', cardData.id)}
+                    onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                    onAddPress={() => handleAddToCart(product)}
                   />
                 );
               })}
@@ -293,7 +344,8 @@ export default function HomeScreen() {
                   weight={cardData.weight}
                   image={cardData.image}
                   showAddButton
-                  onPress={() => console.log('Product pressed:', cardData.id)}
+                  onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                  onAddPress={() => handleAddToCart(product)}
                 />
               );
             })}

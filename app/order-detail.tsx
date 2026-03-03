@@ -1,0 +1,220 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+
+import { AppHeader } from '@/components/layout/AppHeader';
+import { ScreenContainer } from '@/components/layout/ScreenContainer';
+import { useAuth } from '@/context/AuthContext';
+import { getOrderById, type OrderDto } from '@/lib/ordersApi';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const formatPrice = (v: number) =>
+  new Intl.NumberFormat('vi-VN', { style: 'decimal', maximumFractionDigits: 0 }).format(v) + '₫';
+
+const formatDate = (s: string) => {
+  try {
+    const d = new Date(s);
+    return d.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return s;
+  }
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  Pending: 'Chờ xử lý',
+  Processing: 'Đang xử lý',
+  Shipped: 'Đã giao',
+  Delivered: 'Đã nhận',
+  Cancelled: 'Đã hủy',
+};
+
+export default function OrderDetailScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ id: string }>();
+  const { token } = useAuth();
+  const [order, setOrder] = useState<OrderDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme ?? 'light'];
+
+  useEffect(() => {
+    async function fetchOrder() {
+      if (!token || !params.id) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await getOrderById(params.id, token);
+        if (res.success && res.data) {
+          setOrder(res.data);
+        } else {
+          setError(res.message ?? 'Không thể tải chi tiết đơn hàng');
+        }
+      } catch {
+        setError('Có lỗi xảy ra');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchOrder();
+  }, [token, params.id]);
+
+  if (loading || !order) {
+    return (
+      <ScreenContainer scroll={false}>
+        <AppHeader
+          title="Chi tiết đơn hàng"
+          left={
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={{ padding: 4 }}>
+              <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  const statusLabel = STATUS_LABELS[order.status ?? ''] ?? (order.status || 'Chờ xử lý');
+
+  return (
+    <ScreenContainer>
+      <AppHeader
+        title="Chi tiết đơn hàng"
+        left={
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={{ padding: 4 }}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+        }
+      />
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <View style={[styles.card, { backgroundColor: theme.background }]}>
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: theme.text }]}>Mã đơn hàng</Text>
+            <Text style={[styles.value, { color: theme.text }]}>
+              #{order.orderNumber ?? order.orderId.slice(0, 8)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: theme.text }]}>Ngày đặt</Text>
+            <Text style={[styles.value, { color: theme.text }]}>
+              {formatDate(order.orderDate)}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: theme.text }]}>Trạng thái</Text>
+            <Text style={[styles.statusText, { color: theme.primary }]}>{statusLabel}</Text>
+          </View>
+          {order.shippingAddress && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: theme.text }]}>Địa chỉ giao hàng</Text>
+              <Text style={[styles.value, { color: theme.text }]} numberOfLines={3}>
+                {order.shippingAddress}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {order.orderDetails && order.orderDetails.length > 0 && (
+          <View style={[styles.card, { backgroundColor: theme.background }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Sản phẩm</Text>
+            {order.orderDetails.map((d, i) => (
+              <View
+                key={d.orderDetailId ?? i}
+                style={[styles.detailRow, { borderBottomColor: '#e5e7eb' }]}>
+                <Text style={[styles.productName, { color: theme.text }]} numberOfLines={1}>
+                  {d.productName ?? 'Sản phẩm'}
+                </Text>
+                <Text style={[styles.detailMeta, { color: theme.text }]}>
+                  x{d.quantity ?? 0} • {formatPrice(d.totalPrice ?? d.unitPrice ?? 0)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={[styles.card, { backgroundColor: theme.background }]}>
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: theme.text }]}>Tạm tính</Text>
+            <Text style={[styles.value, { color: theme.text }]}>
+              {formatPrice(order.totalAmount ?? 0)}
+            </Text>
+          </View>
+          {order.shippingFee ? (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: theme.text }]}>Phí giao hàng</Text>
+              <Text style={[styles.value, { color: theme.text }]}>
+                {formatPrice(order.shippingFee)}
+              </Text>
+            </View>
+          ) : null}
+          {order.discountAmount ? (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: theme.text }]}>Giảm giá</Text>
+              <Text style={[styles.value, { color: theme.text }]}>
+                -{formatPrice(order.discountAmount)}
+              </Text>
+            </View>
+          ) : null}
+          <View style={[styles.row, styles.totalRow]}>
+            <Text style={[styles.totalLabel, { color: theme.text }]}>Tổng cộng</Text>
+            <Text style={[styles.totalValue, { color: theme.primary }]}>
+              {formatPrice(order.finalAmount ?? order.totalAmount ?? 0)}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { paddingBottom: 24 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  label: { fontSize: 14 },
+  value: { fontSize: 14, flex: 1, textAlign: 'right', marginLeft: 12 },
+  statusText: { fontSize: 14, fontWeight: '600' },
+  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  productName: { fontSize: 14, flex: 1 },
+  detailMeta: { fontSize: 14, marginLeft: 12 },
+  totalRow: { marginTop: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#e5e7eb' },
+  totalLabel: { fontSize: 16, fontWeight: '600' },
+  totalValue: { fontSize: 18, fontWeight: '700' },
+});

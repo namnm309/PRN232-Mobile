@@ -1,14 +1,19 @@
-import React from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
+import { getAvatarUri } from '@/lib/avatarStorage';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, logout, isLoading } = useAuth();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
@@ -25,12 +30,26 @@ export default function ProfileScreen() {
     Alert.alert('Thông báo', 'Tính năng đang được phát triển.');
   };
 
+  const handleProfileInfo = () => router.push('/profile-info');
+  const handleAddresses = () => router.push('/addresses');
+  const handleOrders = () => router.push('/my-orders');
+  const handleSupport = () => router.push('/support');
+  const handlePolicy = () => router.push('/policy');
+  const handleNotifications = () => router.push('/notifications');
+  const handleVoucherWallet = () => router.push('/voucher-wallet');
+
   const accountItems = [
     {
       key: 'profile-info',
       label: 'Thông tin cá nhân',
       description: 'Xem và cập nhật hồ sơ của bạn',
       icon: 'person.fill',
+    },
+    {
+      key: 'voucher-wallet',
+      label: 'Ví voucher',
+      description: 'Voucher của bạn còn hiệu lực',
+      icon: 'gift.fill',
     },
     {
       key: 'address',
@@ -73,8 +92,20 @@ export default function ProfileScreen() {
     },
   ] as const;
 
-  const avatarLetter = user?.fullName?.charAt(0) ?? user?.email?.charAt(0) ?? 'N';
-  const displayName = user?.fullName ?? 'Người dùng Nông Xanh';
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        getAvatarUri(user.id).then(setAvatarUri);
+      } else {
+        setAvatarUri(null);
+      }
+    }, [user?.id])
+  );
+
+  const avatarLetter = user?.displayName?.charAt(0) ?? user?.email?.charAt(0) ?? 'N';
+  const displayName = user?.displayName ?? 'Người dùng Nông Xanh';
   const displayEmail = user?.email ?? 'Chưa có email';
 
   return (
@@ -90,7 +121,11 @@ export default function ProfileScreen() {
             },
           ]}>
           <View style={[styles.avatar, { backgroundColor: theme.primaryLight }]}>
-            <Text style={styles.avatarText}>{avatarLetter}</Text>
+            {avatarUri ? (
+              <ExpoImage source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <Text style={styles.avatarText}>{avatarLetter}</Text>
+            )}
           </View>
           <View style={styles.info}>
             <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
@@ -115,7 +150,17 @@ export default function ProfileScreen() {
             key={item.key}
             style={styles.item}
             activeOpacity={0.7}
-            onPress={handleComingSoon}>
+            onPress={
+              item.key === 'profile-info'
+                ? handleProfileInfo
+                : item.key === 'voucher-wallet'
+                  ? handleVoucherWallet
+                  : item.key === 'address'
+                    ? handleAddresses
+                    : item.key === 'orders'
+                      ? handleOrders
+                      : handleComingSoon
+            }>
             <View style={styles.itemLeft}>
               <View style={[styles.itemIconWrapper, { backgroundColor: theme.primaryLight }]}>
                 <IconSymbol name={item.icon} size={18} color="#052e16" />
@@ -148,7 +193,15 @@ export default function ProfileScreen() {
             key={item.key}
             style={styles.item}
             activeOpacity={0.7}
-            onPress={handleComingSoon}>
+            onPress={
+              item.key === 'notification'
+                ? handleNotifications
+                : item.key === 'support'
+                  ? handleSupport
+                  : item.key === 'policy'
+                    ? handlePolicy
+                    : handleComingSoon
+            }>
             <View style={styles.itemLeft}>
               <View style={[styles.itemIconWrapper, { backgroundColor: theme.primaryLight }]}>
                 <IconSymbol name={item.icon} size={18} color="#052e16" />
@@ -203,6 +256,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 24,

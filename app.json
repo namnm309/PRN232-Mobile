@@ -27,6 +27,13 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép ứng dụng truy cập ảnh để chọn ảnh đại diện.",
+          "cameraPermission": "Cho phép ứng dụng truy cập camera để chụp ảnh đại diện."
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { Colors } from '@/constants/theme';
@@ -8,23 +8,32 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 const CATEGORIES = [
   { id: 'vegetable', label: 'Rau củ', icon: 'spa' as const },
   { id: 'fruit', label: 'Trái cây', icon: 'apple' as const },
-  { id: 'meat', label: 'Thịt tươi', icon: 'set-meal' as const },
-  { id: 'egg', label: 'Trứng', icon: 'egg-alt' as const },
+  { id: 'meat_egg', label: 'Thịt & Trứng', icon: 'set-meal' as const },
+  { id: 'seafood', label: 'Hải sản', icon: 'water' as const },
+  { id: 'dry', label: 'Đồ khô', icon: 'inventory-2' as const },
 ] as const;
 
-export function CategoryGrid() {
+type CategoryGridProps = {
+  onCategoryPress?: (categoryId: string) => void;
+};
+
+export function CategoryGrid({ onCategoryPress }: CategoryGridProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
   return (
     <View style={styles.row}>
       {CATEGORIES.map((cat) => (
-        <View key={cat.id} style={styles.item}>
+        <TouchableOpacity
+          key={cat.id}
+          style={styles.item}
+          activeOpacity={0.8}
+          onPress={() => onCategoryPress?.(cat.id)}>
           <View style={[styles.iconCircle, { backgroundColor: '#ecfdf3' }]}>
             <MaterialIcons name={cat.icon} size={24} color={theme.primary} />
           </View>
           <Text style={styles.label}>{cat.label}</Text>
-        </View>
+        </TouchableOpacity>
       ))}
     </View>
   );
