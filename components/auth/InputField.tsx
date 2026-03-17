@@ -13,7 +13,7 @@ import { AuthColors } from '@/constants/theme';
 
 type InputFieldProps = TextInputProps & {
   label?: string;
-  leftIcon?: 'email' | 'password' | 'person' | 'call' | 'key';
+  leftIcon?: 'email' | 'password' | 'person' | 'call' | 'key' | 'location';
   secureTextEntry?: boolean;
   showPasswordToggle?: boolean;
   error?: string;
@@ -25,6 +25,7 @@ const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
   person: 'person-outline',
   call: 'call-outline',
   key: 'key-outline',
+  location: 'location-outline',
 };
 
 export function InputField({

@@ -27,6 +27,9 @@ export default function RootLayout() {
           <Stack.Screen name="address-edit" options={{ title: 'Địa chỉ' }} />
           <Stack.Screen name="my-orders" options={{ title: 'Đơn hàng của tôi' }} />
           <Stack.Screen name="order-detail" options={{ title: 'Chi tiết đơn hàng' }} />
+          <Stack.Screen name="checkout" options={{ title: 'Đặt hàng' }} />
+          <Stack.Screen name="vnpay-payment" options={{ title: 'Thanh toán VNPay' }} />
+          <Stack.Screen name="thank-you" options={{ title: 'Đặt hàng thành công' }} />
           <Stack.Screen name="voucher-wallet" options={{ title: 'Ví voucher' }} />
           <Stack.Screen name="notifications" options={{ title: 'Thông báo' }} />
           <Stack.Screen name="support" options={{ title: 'Trung tâm hỗ trợ' }} />

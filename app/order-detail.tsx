@@ -1,19 +1,21 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Linking,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { useAuth } from '@/context/AuthContext';
-import { getOrderById, type OrderDto } from '@/lib/ordersApi';
+import { getOrderById, syncGhnStatus, type OrderDto } from '@/lib/ordersApi';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -38,8 +40,11 @@ const formatDate = (s: string) => {
 const STATUS_LABELS: Record<string, string> = {
   Pending: 'Chờ xử lý',
   Processing: 'Đang xử lý',
+  Confirmed: 'Đã xác nhận',
+  Shipping: 'Đang giao',
   Shipped: 'Đã giao',
   Delivered: 'Đã nhận',
+  Returned: 'Đã trả hàng',
   Cancelled: 'Đã hủy',
 };
 
@@ -49,31 +54,54 @@ export default function OrderDetailScreen() {
   const { token } = useAuth();
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
-  useEffect(() => {
-    async function fetchOrder() {
-      if (!token || !params.id) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await getOrderById(params.id, token);
-        if (res.success && res.data) {
-          setOrder(res.data);
-        } else {
-          setError(res.message ?? 'Không thể tải chi tiết đơn hàng');
-        }
-      } catch {
-        setError('Có lỗi xảy ra');
-      } finally {
-        setLoading(false);
-      }
+  const fetchOrder = useCallback(async () => {
+    if (!token || !params.id) {
+      setLoading(false);
+      return;
     }
-    fetchOrder();
+    try {
+      const res = await getOrderById(params.id, token);
+      if (res.success && res.data) {
+        setOrder(res.data);
+      } else {
+        setError(res.message ?? 'Không thể tải chi tiết đơn hàng');
+      }
+    } catch {
+      setError('Có lỗi xảy ra');
+    } finally {
+      setLoading(false);
+    }
   }, [token, params.id]);
+
+  useEffect(() => {
+    fetchOrder();
+  }, [fetchOrder]);
+
+  const handleSyncGhn = useCallback(async () => {
+    if (!token || !params.id) return;
+    setSyncing(true);
+    try {
+      const res = await syncGhnStatus(params.id, token);
+      if (res.success && res.data) {
+        await fetchOrder();
+        Alert.alert(
+          'Trạng thái đơn hàng',
+          `Mã GHN: ${res.data.ghnOrderCode}\nTrạng thái: ${res.data.ghnStatus}${res.data.statusChanged ? '\n✅ Đã cập nhật' : ''}`
+        );
+      } else {
+        Alert.alert('Lỗi', res.message ?? 'Không thể đồng bộ');
+      }
+    } catch (e) {
+      Alert.alert('Lỗi', e instanceof Error ? e.message : 'Không thể đồng bộ');
+    } finally {
+      setSyncing(false);
+    }
+  }, [token, params.id, fetchOrder]);
 
   if (loading || !order) {
     return (
@@ -130,6 +158,38 @@ export default function OrderDetailScreen() {
             <Text style={[styles.label, { color: theme.text }]}>Trạng thái</Text>
             <Text style={[styles.statusText, { color: theme.primary }]}>{statusLabel}</Text>
           </View>
+          {order.shipment?.ghnOrderCode && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: theme.text }]}>Mã vận đơn GHN</Text>
+              <Text style={[styles.value, { color: theme.text }]}>{order.shipment.ghnOrderCode}</Text>
+            </View>
+          )}
+          {order.shipment?.trackingUrl && (
+            <TouchableOpacity
+              style={[styles.trackingBtn, { borderColor: theme.primary }]}
+              onPress={() => Linking.openURL(order.shipment!.trackingUrl!)}
+              activeOpacity={0.8}>
+              <MaterialIcons name="local-shipping" size={18} color={theme.primary} />
+              <Text style={[styles.trackingBtnText, { color: theme.primary }]}>Theo dõi đơn hàng</Text>
+            </TouchableOpacity>
+          )}
+          {(order.status === 'Confirmed' || order.status === 'Shipping') &&
+            order.shipment?.ghnOrderCode && (
+              <TouchableOpacity
+                style={[styles.syncBtn, { backgroundColor: theme.primary }]}
+                onPress={handleSyncGhn}
+                disabled={syncing}
+                activeOpacity={0.8}>
+                {syncing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="sync" size={18} color="#fff" />
+                    <Text style={styles.syncBtnText}>Cập nhật tình trạng</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
           {order.shippingAddress && (
             <View style={styles.row}>
               <Text style={[styles.label, { color: theme.text }]}>Địa chỉ giao hàng</Text>
@@ -217,4 +277,27 @@ const styles = StyleSheet.create({
   totalRow: { marginTop: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#e5e7eb' },
   totalLabel: { fontSize: 16, fontWeight: '600' },
   totalValue: { fontSize: 18, fontWeight: '700' },
+  trackingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  trackingBtnText: { fontSize: 14, fontWeight: '600' },
+  syncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+  },
+  syncBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
 });

@@ -13,6 +13,7 @@ const CART_KEY = '@nongxanh:cart';
 export type CartItem = {
   id: string;
   productId: string;
+  variantId?: string; // Bắt buộc khi sync BE, cần cho checkout
   name: string;
   unitPrice: number;
   quantity: number;
@@ -25,7 +26,7 @@ type CartContextValue = {
   count: number;
   addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
   removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, delta: number) => void;
+  updateQuantity: (productIdOrVariantId: string, delta: number) => void;
   clearCart: () => void;
   subtotal: number;
 };
@@ -81,7 +82,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
       const qty = item.quantity ?? 1;
       setItems((prev) => {
-        const idx = prev.findIndex((i) => i.productId === item.productId);
+        const key = item.variantId ?? item.productId;
+        const idx = prev.findIndex((i) => (i.variantId ?? i.productId) === key);
         if (idx >= 0) {
           const next = [...prev];
           next[idx] = { ...next[idx], quantity: next[idx].quantity + qty };
@@ -97,11 +99,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => prev.filter((i) => i.productId !== productId));
   }, []);
 
-  const updateQuantity = useCallback((productId: string, delta: number) => {
+  const updateQuantity = useCallback((productIdOrVariantId: string, delta: number) => {
     setItems((prev) =>
       prev
         .map((i) =>
-          i.productId === productId
+          i.variantId === productIdOrVariantId || i.productId === productIdOrVariantId
             ? { ...i, quantity: Math.max(0, i.quantity + delta) }
             : i
         )

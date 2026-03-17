@@ -10,6 +10,14 @@ export type OrderDetailDto = {
   totalPrice?: number;
 };
 
+export type ShipmentDto = {
+  shipmentId?: string;
+  ghnOrderCode?: string | null;
+  deliveryStatus?: string | null;
+  rawStatus?: string | null;
+  trackingUrl?: string | null;
+};
+
 export type OrderDto = {
   orderId: string;
   orderNumber: string | null;
@@ -21,9 +29,32 @@ export type OrderDto = {
   shippingAddress: string | null;
   status: string | null;
   vnPayStatus: string | null;
+  deliveryStatus?: string | null;
   userId: string;
   orderDetails: OrderDetailDto[] | null;
+  shipment?: ShipmentDto | null;
 };
+
+export type GhnStatusSyncResponseDto = {
+  orderId: string;
+  ghnOrderCode: string;
+  ghnStatus: string;
+  orderStatus: string;
+  previousOrderStatus: string;
+  statusChanged: boolean;
+  trackingUrl?: string | null;
+};
+
+export async function syncGhnStatus(
+  orderId: string,
+  token: string
+): Promise<ApiResponse<GhnStatusSyncResponseDto>> {
+  const url = `${config.apiBaseUrl}/api/Orders/${orderId}/ghn-status`;
+  return authenticatedRequest<ApiResponse<GhnStatusSyncResponseDto>>(url, {
+    method: 'GET',
+    token,
+  });
+}
 
 export type PagedResult<T> = {
   items: T[];

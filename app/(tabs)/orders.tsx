@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   Alert,
   FlatList,
@@ -25,14 +26,10 @@ const PLACEHOLDER_IMAGE = require('@/assets/images/splash-icon.png');
 import { applyVoucher } from '@/lib/vouchers';
 
 export default function CartScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
-  const {
-    items,
-    updateQuantity,
-    clearCart,
-    subtotal,
-  } = useCart();
+  const { items, updateQuantity, subtotal } = useCart();
   const [voucherCode, setVoucherCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
@@ -58,23 +55,10 @@ export default function CartScreen() {
 
   const handleCheckout = () => {
     if (items.length === 0) return;
-    Alert.alert(
-      'Đặt hàng',
-      'Bạn có chắc muốn đặt hàng? (Chức năng đặt hàng qua API đang phát triển)',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xác nhận',
-          onPress: () => {
-            clearCart();
-            setAppliedDiscount(0);
-            setAppliedCode(null);
-            setVoucherCode('');
-            Alert.alert('Thành công', 'Đơn hàng đã được ghi nhận. Cảm ơn bạn!');
-          },
-        },
-      ]
-    );
+    router.push({
+      pathname: '/checkout',
+      params: appliedCode ? { voucherCode: appliedCode } : undefined,
+    });
   };
 
   const updateQuantityHandler = (productId: string, delta: number) => {
@@ -85,9 +69,11 @@ export default function CartScreen() {
     }
   };
 
+  const shippingFeeDisplay = items.length > 0 ? SHIPPING_FEE : 0;
   const total = useMemo(() => {
+    if (items.length === 0) return 0;
     return Math.max(0, subtotal - appliedDiscount + SHIPPING_FEE);
-  }, [subtotal, appliedDiscount]);
+  }, [items.length, subtotal, appliedDiscount]);
 
   const getImageSource = (item: CartItem) => {
     if (typeof item.image === 'object' && item.image?.uri) {
@@ -118,14 +104,14 @@ export default function CartScreen() {
           <View style={styles.quantityRow}>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => updateQuantityHandler(item.productId, -1)}
+              onPress={() => updateQuantityHandler(item.variantId ?? item.productId, -1)}
               style={[styles.quantityBtn, { borderColor: theme.primary }]}>
               <MaterialIcons name="remove" size={18} color={theme.primary} />
             </TouchableOpacity>
             <Text style={[styles.quantityText, { color: theme.text }]}>{item.quantity}</Text>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => updateQuantityHandler(item.productId, 1)}
+              onPress={() => updateQuantityHandler(item.variantId ?? item.productId, 1)}
               style={[styles.quantityBtn, { borderColor: theme.primary, backgroundColor: theme.primary }]}>
               <MaterialIcons name="add" size={18} color="#fff" />
             </TouchableOpacity>
@@ -144,7 +130,7 @@ export default function CartScreen() {
 
       <FlatList
         data={items}
-        keyExtractor={(item) => item.productId}
+        keyExtractor={(item) => item.variantId ?? item.productId}
         renderItem={renderCartItem}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -209,7 +195,7 @@ export default function CartScreen() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Phí giao hàng</Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>
-                  {formatPrice(SHIPPING_FEE)}
+                  {formatPrice(shippingFeeDisplay)}
                 </Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryRowTotal]}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ScrollView, StyleSheet, View, Text, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { HomeHeader } from '@/components/layout/HomeHeader';
@@ -14,7 +14,7 @@ import { InlineSectionFilter } from '@/components/ui/InlineSectionFilter';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { 
-  getProducts, 
+  getProductsWithRetry, 
   mapProductToCardData, 
   getUniqueOrigins,
   getUniqueProviders,
@@ -25,6 +25,7 @@ import {
   getPrimaryImageUrl,
 } from '@/lib/productsApi';
 import { config } from '@/lib/config';
+import { loadCachedProducts, saveProductsToCache } from '@/lib/productsCache';
 import { getDefaultAddress } from '@/lib/addressStorage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -62,45 +63,39 @@ export default function HomeScreen() {
     }, [user?.id])
   );
 
-  // Fetch products on mount or when token changes
-  useEffect(() => {
-    async function fetchProducts() {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Call API with or without token (backend allows anonymous for GET)
-        const response = await getProducts(token || undefined, 1, 50);
-        
-        if (response.success && response.data) {
-          setProducts(response.data.items);
-          console.log('✅ Products fetched:', response.data.items.length);
-          console.log('📦 Total count:', response.data.totalCount);
-          
-          // Debug: Check if provider object is included
-          const sampleProduct = response.data.items[0];
-          if (sampleProduct) {
-            console.log('🔍 Sample product:', {
-              id: sampleProduct.productId,
-              name: sampleProduct.productName,
-              providerId: sampleProduct.providerId,
-              hasProvider: !!sampleProduct.provider,
-              providerName: sampleProduct.provider?.providerName || 'N/A',
-            });
-          }
-        } else {
-          setError(response.message || 'Không thể tải sản phẩm');
-        }
-      } catch (err) {
-        console.error('Error fetching products:', err);
-        setError('Có lỗi xảy ra khi tải sản phẩm');
-      } finally {
+  const fetchProducts = useCallback(async () => {
+    let hadCache = false;
+    try {
+      setError(null);
+      const cached = await loadCachedProducts();
+      hadCache = cached.length > 0;
+      if (hadCache) {
+        setProducts(cached);
         setLoading(false);
+      } else {
+        setLoading(true);
       }
-    }
 
-    fetchProducts();
+      const response = await getProductsWithRetry(token || undefined, 1, 50);
+
+      if (response.success && response.data) {
+        const items = Array.isArray(response.data.items) ? response.data.items : [];
+        setProducts(items);
+        await saveProductsToCache(items);
+      } else if (!hadCache) {
+        setError(response.message || 'Không thể tải sản phẩm');
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      if (!hadCache) setError('Có lỗi xảy ra khi tải sản phẩm');
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   // Auto-select random origin when products load
   useEffect(() => {
@@ -139,15 +134,18 @@ export default function HomeScreen() {
   const productsForFiltering = filteredBySearch.slice(3);
 
   const handleAddToCart = (product: Product) => {
+    const variant = product.productVariants?.[0];
+    const variantId = variant?.variantId;
     const imageUrl = getPrimaryImageUrl(product.productImages);
     const imageSource = imageUrl
       ? { uri: imageUrl.startsWith('http') ? imageUrl : `${config.apiBaseUrl}${imageUrl}` }
       : PLACEHOLDER_IMAGE;
     addItem({
-      id: product.productId,
+      id: variantId ?? product.productId,
       productId: product.productId,
+      variantId: variantId,
       name: product.productName,
-      unitPrice: product.basePrice,
+      unitPrice: variant?.price ?? product.basePrice,
       image: imageSource,
       weight: product.unit || product.origin || undefined,
     });
@@ -210,6 +208,12 @@ export default function HomeScreen() {
       {error && !loading && (
         <View style={styles.centerContainer}>
           <Text style={[styles.errorText, { color: '#ef4444' }]}>{error}</Text>
+          <TouchableOpacity
+            onPress={fetchProducts}
+            style={[styles.retryBtn, { backgroundColor: theme.primary }]}
+            activeOpacity={0.8}>
+            <Text style={styles.retryBtnText}>Thử lại</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -376,6 +380,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  retryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
   emptyText: {
     fontSize: 14,

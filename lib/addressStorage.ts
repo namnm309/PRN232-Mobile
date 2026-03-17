@@ -8,6 +8,12 @@ export type ShippingAddress = {
   phone: string;
   fullAddress: string;
   isDefault?: boolean;
+  /** GHN IDs cho tính phí ship - dùng khi checkout */
+  provinceId?: number;
+  districtId?: number;
+  wardCode?: string;
+  /** Chi tiết địa chỉ (số nhà, đường...) - dùng khi có dropdown Tỉnh/Quận/Xã */
+  detailAddress?: string;
 };
 
 async function getKey(userId: string): Promise<string> {

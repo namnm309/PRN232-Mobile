@@ -33,11 +33,11 @@ function matchCategory(catId: string, categoryName: string | null | undefined): 
   if (!categoryName) return false;
   const lower = categoryName.toLowerCase();
   const maps: Record<string, string[]> = {
-    vegetable: ['rau', 'vegetable'],
-    fruit: ['trái', 'fruit', 'quả', 'trai cay'],
-    meat_egg: ['thịt', 'trứng', 'meat', 'egg'],
-    seafood: ['hải', 'cá', 'tôm', 'seafood', 'fish', 'shrimp'],
-    dry: ['khô', 'đậu', 'gạo', 'đồ khô', 'dry', 'grain', 'bean'],
+    vegetable: ['rau', 'vegetable', 'rau củ', 'củ', 'nấm'],
+    fruit: ['trái', 'fruit', 'quả', 'trai cay', 'xoài', 'sầu', 'dưa', 'dâu'],
+    meat_egg: ['thịt', 'trứng', 'meat', 'egg', 'heo', 'bò', 'gà'],
+    seafood: ['hải', 'cá', 'tôm', 'seafood', 'fish', 'shrimp', 'hải sản', 'ngao', 'sò', 'ốc'],
+    dry: ['khô', 'đậu', 'gạo', 'đồ khô', 'dry', 'grain', 'bean', 'gia vị'],
   };
   const keywords = maps[catId] ?? [];
   return keywords.some((k) => lower.includes(k));
@@ -135,9 +135,10 @@ export default function MarketScreen() {
   }, [token]);
 
   const productsInCategory = useMemo(() => {
-    return products.filter((p) =>
-      matchCategory(selectedCategoryId, p.category?.categoryName)
-    );
+    return products.filter((p) => {
+      const catName = p.categoryName ?? p.category?.categoryName;
+      return matchCategory(selectedCategoryId, catName);
+    });
   }, [products, selectedCategoryId]);
 
   const filteredProducts = useMemo(() => {
@@ -149,6 +150,8 @@ export default function MarketScreen() {
   }, [productsInCategory, search]);
 
   const handleAddToCart = (product: Product) => {
+    const variant = product.productVariants?.[0];
+    const variantId = variant?.variantId;
     const imageUrl = getPrimaryImageUrl(product.productImages);
     const imageSource = imageUrl
       ? {
@@ -158,24 +161,18 @@ export default function MarketScreen() {
         }
       : PLACEHOLDER_IMAGE;
     addItem({
-      id: product.productId,
+      id: variantId ?? product.productId,
       productId: product.productId,
+      variantId: variantId,
       name: product.productName,
-      unitPrice: product.basePrice,
+      unitPrice: variant?.price ?? product.basePrice,
       image: imageSource,
       weight: product.unit || product.origin || undefined,
     });
   };
 
-  // Khi category không khớp sản phẩm từ API, hiển thị tất cả sản phẩm (đã lọc search)
-  const displayProducts =
-    productsInCategory.length > 0
-      ? filteredProducts
-      : search.trim()
-        ? products.filter((p) =>
-            p.productName.toLowerCase().includes(search.trim().toLowerCase())
-          )
-        : products;
+  // Chỉ hiển thị sản phẩm thuộc danh mục đã chọn (+ lọc search)
+  const displayProducts = filteredProducts;
 
   return (
     <ScreenContainer scroll={false}>

@@ -10,6 +10,14 @@ export type ProductImage = {
   createdAt: string;
 };
 
+export type ProductVariant = {
+  variantId: string;
+  variantName?: string | null;
+  price: number;
+  stockQuantity?: number;
+  productId?: string;
+};
+
 export type Product = {
   productId: string; // Changed from number to string (GUID)
   productName: string;
@@ -22,11 +30,13 @@ export type Product = {
   createdAt: string;
   updatedAt: string | null;
   categoryId: string | null; // Changed from number to string (GUID)
+  categoryName?: string | null;
   category?: Category | null; // Optional category object
   providerId: string | null; // Changed from number to string (GUID)
   provider?: Provider | null; // Optional provider object
   isDeleted: boolean;
   productImages: ProductImage[];
+  productVariants?: ProductVariant[];
 };
 
 export type Category = {
@@ -73,8 +83,32 @@ export async function getProducts(
   });
 }
 
+const RETRY_DELAY_MS = 3000;
+const MAX_RETRIES = 3;
+
+/** Gọi getProducts với retry (3 lần, mỗi lần cách 3s) - hữu ích khi Azure cold start */
+export async function getProductsWithRetry(
+  token?: string,
+  pageNumber: number = 1,
+  pageSize: number = 20
+): Promise<ApiResponse<PagedResult<Product>>> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await getProducts(token, pageNumber, pageSize);
+      return res;
+    } catch (e) {
+      lastError = e;
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export async function getProductById(
-  productId: number,
+  productId: string,
   token?: string
 ): Promise<ApiResponse<Product>> {
   const url = `${config.apiBaseUrl}/api/Products/${productId}`;
@@ -82,6 +116,19 @@ export async function getProductById(
     method: 'GET',
     token,
   });
+}
+
+/** Lấy tất cả biến thể - dùng để resolve variantId khi cart item thiếu */
+export async function getProductVariants(
+  token?: string
+): Promise<ApiResponse<Array<{ variantId: string; productId: string; price: number }>>> {
+  const url = `${config.apiBaseUrl}/api/ProductVariants`;
+  const res = await authenticatedRequest<ApiResponse<Array<{ variantId: string; productId: string; price: number }>>>(url, {
+    method: 'GET',
+    token,
+  });
+  if (res.success && Array.isArray(res.data)) return res;
+  return { ...res, success: false, data: [] };
 }
 
 // Mappers for UI
