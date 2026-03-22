@@ -180,7 +180,7 @@ export default function MarketScreen() {
         title="Danh mục"
         left={
           <TouchableOpacity
-            onPress={() => router.replace('/(tabs)/')}
+            onPress={() => router.replace('/(tabs)')}
             activeOpacity={0.8}
             style={styles.headerIconButton}>
             <View style={styles.headerIconCircle}>

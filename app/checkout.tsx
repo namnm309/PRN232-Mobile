@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
@@ -115,9 +116,7 @@ export default function CheckoutScreen() {
     }
   }, [token, items, selectedAddress, subtotal, voucherCode]);
 
-  useEffect(() => {
-    loadAddresses();
-  }, [loadAddresses]);
+  useFocusEffect(useCallback(() => void loadAddresses(), [loadAddresses]));
 
   useEffect(() => {
     if (!token || !user?.id) {
@@ -155,9 +154,10 @@ export default function CheckoutScreen() {
         paymentMethod,
         recipientName: selectedAddress.recipientName,
         recipientPhone: selectedAddress.phone,
+        provinceCode: GHN_DEFAULT.provinceCode,
         provinceId: GHN_DEFAULT.provinceId,
-        toDistrictId: GHN_DEFAULT.districtId,
         toWardCode: GHN_DEFAULT.wardCode,
+        toDistrictId: GHN_DEFAULT.districtId,
         insuranceValue: Math.min(subtotal, 5_000_000),
         voucherCode: voucherCode || undefined,
       });

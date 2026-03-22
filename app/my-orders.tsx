@@ -15,9 +15,10 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { useAuth } from '@/context/AuthContext';
-import { getOrders, syncGhnStatus, type OrderDto } from '@/lib/ordersApi';
+import { getOrders, syncShipmentStatus, type OrderDto } from '@/lib/ordersApi';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getGhnDeliveryStatusLabel } from '@/constants/ghnStatusLabels';
 
 const formatPrice = (v: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'decimal', maximumFractionDigits: 0 }).format(v) + '₫';
@@ -44,6 +45,7 @@ const STATUS_LABELS: Record<string, string> = {
   Delivered: 'Đã nhận',
   Returned: 'Đã trả hàng',
   Cancelled: 'Đã hủy',
+  DeliveryFailed: 'Giao hàng thất bại',
 };
 
 export default function MyOrdersScreen() {
@@ -95,7 +97,7 @@ export default function MyOrdersScreen() {
       );
       if (ghnOrders.length > 0) {
         await Promise.all(
-          ghnOrders.map((o: OrderDto) => syncGhnStatus(o.orderId, token).catch(() => null))
+          ghnOrders.map((o: OrderDto) => syncShipmentStatus(o.orderId, token).catch(() => null))
         );
         const res2 = await getOrders(token, 1, 50);
         if (res2.success && res2.data) setOrders(res2.data.items ?? []);
@@ -120,18 +122,21 @@ export default function MyOrdersScreen() {
       if (!token) return;
       try {
         setLoading(true);
-        const res = await syncGhnStatus(orderId, token);
+        const res = await syncShipmentStatus(orderId, token);
         if (res.success && res.data) {
           await loadOrders(true);
+          const status = getGhnDeliveryStatusLabel(
+            res.data.deliveryStatus ?? res.data.rawStatus ?? ''
+          );
           Alert.alert(
             'Trạng thái đơn hàng',
-            `Mã GHN: ${res.data.ghnOrderCode}\nTrạng thái GHN: ${res.data.ghnStatus}\nTrạng thái đơn: ${res.data.orderStatus}${res.data.statusChanged ? '\n✅ Đã cập nhật' : '\nℹ️ Không có thay đổi'}`
+            `Mã GHN: ${res.data.ghnOrderCode ?? '-'}\nTrạng thái vận đơn: ${status}\n✅ Đã cập nhật từ GHN`
           );
         } else {
-          Alert.alert('Lỗi', res.message ?? 'Không thể lấy trạng thái');
+          Alert.alert('Lỗi', res.message ?? 'Không thể đồng bộ trạng thái');
         }
       } catch (e) {
-        Alert.alert('Lỗi', e instanceof Error ? e.message : 'Không thể lấy trạng thái');
+        Alert.alert('Lỗi', e instanceof Error ? e.message : 'Không thể đồng bộ trạng thái');
       } finally {
         setLoading(false);
       }
@@ -208,7 +213,7 @@ export default function MyOrdersScreen() {
           <MaterialIcons name="error-outline" size={48} color="#ef4444" />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity
-            onPress={loadOrders}
+            onPress={() => loadOrders(true)}
             style={[styles.retryBtn, { borderColor: theme.primary }]}>
             <Text style={[styles.retryBtnText, { color: theme.primary }]}>
               Thử lại

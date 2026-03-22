@@ -150,10 +150,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, isLoading: true }));
     try {
       // Sử dụng proxy của Expo (auth.expo.io) với project full name @owner/slug
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore projectNameForProxy chưa có trong type định nghĩa nhưng được hỗ trợ runtime
       const redirectUri = AuthSession.makeRedirectUri({
         path: 'redirect',
+        // @ts-expect-error projectNameForProxy được hỗ trợ runtime bởi Expo
         projectNameForProxy: '@namnm309/NongXanh',
       });
       const nonce = Math.random().toString(36).substring(2);

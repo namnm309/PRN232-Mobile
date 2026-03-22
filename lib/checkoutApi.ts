@@ -36,9 +36,10 @@ export type CheckoutOrderRequest = {
   paymentMethod: string;
   recipientName: string;
   recipientPhone: string;
-  provinceId?: number;
-  toDistrictId?: number;
+  provinceCode: string;
+  provinceId: number;
   toWardCode: string;
+  toDistrictId?: number;
   insuranceValue?: number;
   voucherCode?: string | null;
 };

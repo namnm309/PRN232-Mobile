@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { WebBrowser } from 'expo-web-browser';
+import { openBrowserAsync } from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -31,7 +31,7 @@ export default function VnPayPaymentScreen() {
     if (!paymentUrl) return;
     setOpening(true);
     try {
-      await WebBrowser.openBrowserAsync(paymentUrl, {
+      await openBrowserAsync(String(paymentUrl), {
         toolbarColor: theme.primary,
         controlsColor: theme.primary,
       });

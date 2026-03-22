@@ -20,10 +20,7 @@ export function CustomBottomTabBar(props: BottomTabBarProps) {
         ]}>
         <BottomTabBar
           {...props}
-          style={[
-            props.style,
-            styles.tabBar,
-          ]}
+          style={styles.tabBar}
         />
       </View>
     </View>

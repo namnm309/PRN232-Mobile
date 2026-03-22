@@ -15,9 +15,10 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { useAuth } from '@/context/AuthContext';
-import { getOrderById, syncGhnStatus, type OrderDto } from '@/lib/ordersApi';
+import { getOrderById, syncShipmentStatus, type OrderDto } from '@/lib/ordersApi';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getGhnDeliveryStatusLabel } from '@/constants/ghnStatusLabels';
 
 const formatPrice = (v: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'decimal', maximumFractionDigits: 0 }).format(v) + '₫';
@@ -46,7 +47,10 @@ const STATUS_LABELS: Record<string, string> = {
   Delivered: 'Đã nhận',
   Returned: 'Đã trả hàng',
   Cancelled: 'Đã hủy',
+  DeliveryFailed: 'Giao hàng thất bại',
 };
+
+const GHN_TRACKING_BASE = 'https://tracking.ghn.dev/?order_code=';
 
 export default function OrderDetailScreen() {
   const router = useRouter();
@@ -86,12 +90,15 @@ export default function OrderDetailScreen() {
     if (!token || !params.id) return;
     setSyncing(true);
     try {
-      const res = await syncGhnStatus(params.id, token);
+      const res = await syncShipmentStatus(params.id, token);
       if (res.success && res.data) {
         await fetchOrder();
+        const status = getGhnDeliveryStatusLabel(
+          res.data.deliveryStatus ?? res.data.rawStatus ?? ''
+        );
         Alert.alert(
           'Trạng thái đơn hàng',
-          `Mã GHN: ${res.data.ghnOrderCode}\nTrạng thái: ${res.data.ghnStatus}${res.data.statusChanged ? '\n✅ Đã cập nhật' : ''}`
+          `Mã GHN: ${res.data.ghnOrderCode ?? '-'}\nTrạng thái vận đơn: ${status}\n✅ Đã cập nhật từ GHN`
         );
       } else {
         Alert.alert('Lỗi', res.message ?? 'Không thể đồng bộ');
@@ -103,7 +110,7 @@ export default function OrderDetailScreen() {
     }
   }, [token, params.id, fetchOrder]);
 
-  if (loading || !order) {
+  if (loading) {
     return (
       <ScreenContainer scroll={false}>
         <AppHeader
@@ -119,6 +126,40 @@ export default function OrderDetailScreen() {
         />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  if (!order || error) {
+    return (
+      <ScreenContainer scroll={false}>
+        <AppHeader
+          title="Chi tiết đơn hàng"
+          left={
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={{ padding: 4 }}>
+              <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.center}>
+          <MaterialIcons name="error-outline" size={48} color="#ef4444" />
+          <Text style={[styles.errorText, { color: theme.text }]}>
+            {error ?? 'Không tìm thấy đơn hàng'}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setError(null);
+              setLoading(true);
+              fetchOrder();
+            }}
+            style={[styles.retryBtn, { borderColor: theme.primary }]}
+            activeOpacity={0.8}>
+            <Text style={[styles.retryBtnText, { color: theme.primary }]}>Thử lại</Text>
+          </TouchableOpacity>
         </View>
       </ScreenContainer>
     );
@@ -159,15 +200,27 @@ export default function OrderDetailScreen() {
             <Text style={[styles.statusText, { color: theme.primary }]}>{statusLabel}</Text>
           </View>
           {order.shipment?.ghnOrderCode && (
-            <View style={styles.row}>
-              <Text style={[styles.label, { color: theme.text }]}>Mã vận đơn GHN</Text>
-              <Text style={[styles.value, { color: theme.text }]}>{order.shipment.ghnOrderCode}</Text>
-            </View>
+            <>
+              <View style={styles.row}>
+                <Text style={[styles.label, { color: theme.text }]}>Mã vận đơn GHN</Text>
+                <Text style={[styles.value, { color: theme.text }]}>{order.shipment.ghnOrderCode}</Text>
+              </View>
+              {(order.shipment.deliveryStatus || order.shipment.rawStatus) && (
+                <View style={styles.row}>
+                  <Text style={[styles.label, { color: theme.text }]}>Trạng thái vận đơn</Text>
+                  <Text style={[styles.statusText, { color: theme.primary }]}>
+                    {getGhnDeliveryStatusLabel(order.shipment.deliveryStatus ?? order.shipment.rawStatus)}
+                  </Text>
+                </View>
+              )}
+            </>
           )}
-          {order.shipment?.trackingUrl && (
+          {(order.shipment?.trackingUrl || (order.shipment?.ghnOrderCode && `${GHN_TRACKING_BASE}${order.shipment.ghnOrderCode}`)) && (
             <TouchableOpacity
               style={[styles.trackingBtn, { borderColor: theme.primary }]}
-              onPress={() => Linking.openURL(order.shipment!.trackingUrl!)}
+              onPress={() =>
+                Linking.openURL(order.shipment!.trackingUrl || `${GHN_TRACKING_BASE}${order.shipment!.ghnOrderCode!}`)
+              }
               activeOpacity={0.8}>
               <MaterialIcons name="local-shipping" size={18} color={theme.primary} />
               <Text style={[styles.trackingBtnText, { color: theme.primary }]}>Theo dõi đơn hàng</Text>
@@ -300,4 +353,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   syncBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  errorText: { marginTop: 12, fontSize: 14, color: '#ef4444', textAlign: 'center' },
+  retryBtn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '600' },
 });

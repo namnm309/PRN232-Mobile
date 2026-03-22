@@ -35,23 +35,37 @@ export type OrderDto = {
   shipment?: ShipmentDto | null;
 };
 
-export type GhnStatusSyncResponseDto = {
-  orderId: string;
-  ghnOrderCode: string;
-  ghnStatus: string;
-  orderStatus: string;
-  previousOrderStatus: string;
-  statusChanged: boolean;
-  trackingUrl?: string | null;
-};
-
-export async function syncGhnStatus(
+/** Lấy shipment hiện tại theo order */
+export async function getShipment(
   orderId: string,
   token: string
-): Promise<ApiResponse<GhnStatusSyncResponseDto>> {
-  const url = `${config.apiBaseUrl}/api/Orders/${orderId}/ghn-status`;
-  return authenticatedRequest<ApiResponse<GhnStatusSyncResponseDto>>(url, {
+): Promise<ApiResponse<ShipmentDto>> {
+  const url = `${config.apiBaseUrl}/api/Orders/${orderId}/shipment`;
+  return authenticatedRequest<ApiResponse<ShipmentDto>>(url, {
     method: 'GET',
+    token,
+  });
+}
+
+/** Đồng bộ trạng thái từ GHN thủ công (nút refresh) */
+export async function syncShipmentStatus(
+  orderId: string,
+  token: string
+): Promise<ApiResponse<ShipmentDto>> {
+  const url = `${config.apiBaseUrl}/api/Orders/${orderId}/shipment/sync`;
+  return authenticatedRequest<ApiResponse<ShipmentDto>>(url, {
+    method: 'POST',
+    token,
+  });
+}
+
+/** Đồng bộ tất cả shipment (cho admin/staff) */
+export async function syncAllShipments(
+  token: string
+): Promise<ApiResponse<{ totalCandidates: number; syncedCount: number; failedCount: number; syncedAt: string; failures: Array<{ orderId: string; ghnOrderCode?: string; error: string }> }>> {
+  const url = `${config.apiBaseUrl}/api/Orders/shipments/sync-all`;
+  return authenticatedRequest(url, {
+    method: 'POST',
     token,
   });
 }

@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -63,6 +70,7 @@ export default function ThankYouScreen() {
   const getMessage = () => {
     if (loading) return 'Đang kiểm tra...';
     if (error) return error;
+    if (!orderId) return 'Thiếu thông tin đơn hàng.';
     if (isCod) return 'Đơn hàng đã được đặt thành công!';
     if (isVnPaySuccess) return 'Thanh toán VNPay thành công! Đơn hàng của bạn đã được xác nhận.';
     return 'Đơn hàng đã được tạo. Bạn có thể kiểm tra trạng thái thanh toán VNPay trong chi tiết đơn hàng.';
@@ -94,9 +102,23 @@ export default function ThankYouScreen() {
           <Text style={styles.orderNum}>Mã đơn: {order.orderNumber}</Text>
         )}
         {order?.shipment?.ghnOrderCode && (
-          <Text style={[styles.orderNum, { marginTop: 4 }]}>
-            Mã vận đơn: {order.shipment.ghnOrderCode}
-          </Text>
+          <View style={{ alignItems: 'center', marginTop: 4, marginBottom: 16 }}>
+            <Text style={styles.orderNum}>Mã vận đơn: {order.shipment.ghnOrderCode}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                Linking.openURL(
+                  order.shipment?.trackingUrl ||
+                    `https://tracking.ghn.dev/?order_code=${order.shipment?.ghnOrderCode}`
+                )
+              }
+              activeOpacity={0.8}
+              style={[styles.trackingLink, { borderColor: theme.primary }]}>
+              <MaterialIcons name="local-shipping" size={18} color={theme.primary} />
+              <Text style={[styles.trackingLinkText, { color: theme.primary }]}>
+                Theo dõi đơn hàng
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <TouchableOpacity
@@ -124,7 +146,18 @@ const styles = StyleSheet.create({
   loader: { marginBottom: 24 },
   icon: { marginBottom: 24 },
   message: { fontSize: 17, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
-  orderNum: { fontSize: 14, color: '#6b7280', marginBottom: 32 },
+  orderNum: { fontSize: 14, color: '#6b7280', marginBottom: 16 },
+  trackingLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  trackingLinkText: { fontSize: 14, fontWeight: '600' },
   homeBtn: {
     paddingVertical: 14,
     paddingHorizontal: 32,
