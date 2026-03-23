@@ -21,6 +21,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 type AddressValue = {
   provinceId?: number;
   provinceName?: string;
+  provinceCode?: string | null;
   districtId?: number;
   districtName?: string;
   wardCode?: string;
@@ -69,6 +70,7 @@ export default function AddressEditScreen() {
         setDetailAddress(addr.detailAddress ?? addr.fullAddress);
         setAddressValue({
           provinceId: addr.provinceId,
+          provinceCode: addr.provinceCode,
           districtId: addr.districtId,
           wardCode: addr.wardCode,
         });
@@ -88,7 +90,7 @@ export default function AddressEditScreen() {
     const trimName = recipientName.trim();
     const trimPhone = phone.trim();
     const trimDetail = detailAddress.trim();
-    const { provinceId, provinceName, districtId, districtName, wardCode, wardName } =
+    const { provinceId, provinceName, provinceCode, districtId, districtName, wardCode, wardName } =
       addressValue;
 
     if (!trimName) {
@@ -122,6 +124,7 @@ export default function AddressEditScreen() {
         fullAddress: fullAddr,
         detailAddress: trimDetail,
         provinceId,
+        provinceCode: provinceCode || undefined,
         districtId,
         wardCode,
         isDefault,

@@ -12,6 +12,7 @@ export type ShippingAddress = {
   provinceId?: number;
   districtId?: number;
   wardCode?: string;
+  provinceCode?: string;
   /** Chi tiết địa chỉ (số nhà, đường...) - dùng khi có dropdown Tỉnh/Quận/Xã */
   detailAddress?: string;
 };

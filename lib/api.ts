@@ -47,7 +47,7 @@ async function request<T>(
 ): Promise<T> {
   const { token, ...init } = options;
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
     ...(init.headers as Record<string, string>),
   };
   if (token) {
@@ -56,14 +56,24 @@ async function request<T>(
 
   const res = await fetch(url, { ...init, headers });
   if (res.status === 204) return undefined as T;
-  const data = await res.json().catch(() => ({}));
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    let message = data?.message ?? data?.title ?? `HTTP ${res.status}`;
+    let message: string =
+      (data?.detail as string) ??
+      (data?.message as string) ??
+      (data?.title as string) ??
+      `HTTP ${res.status}`;
+    const errArr = data?.errors as string[] | undefined;
+    if (Array.isArray(errArr) && errArr.length > 0) {
+      message = errArr.join('; ');
+    } else if (typeof message !== 'string') {
+      message = Array.isArray(message) ? message.join('; ') : String(message ?? `HTTP ${res.status}`);
+    }
     if (res.status === 401) {
       message =
         'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng xuất và đăng nhập lại.';
     }
-    throw new Error(Array.isArray(message) ? message.join(', ') : message);
+    throw new Error(message);
   }
   return data as T;
 }

@@ -20,6 +20,8 @@ type ProductCardProps = {
   variant?: 'default' | 'compact';
   /** Hiển thị nút thêm (+) hoặc icon giỏ hàng */
   showAddButton?: boolean;
+  /** Vô hiệu hóa nút thêm (vd: hết hàng) - vẫn hiển thị nhưng không cho bấm */
+  addDisabled?: boolean;
   onPress?: () => void;
   /** Gọi khi bấm nút thêm vào giỏ (tránh trigger onPress của card) */
   onAddPress?: () => void;
@@ -36,6 +38,7 @@ export function ProductCard({
   discountBadge,
   variant = 'default',
   showAddButton,
+  addDisabled,
   onPress,
   onAddPress,
 }: ProductCardProps) {
@@ -90,16 +93,22 @@ export function ProductCard({
           <Text style={[styles.price, { color: theme.primary }]}>{price}</Text>
         </View>
         {showAddButton ? (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => onAddPress?.()}
-            style={[styles.addButton, { backgroundColor: theme.primary }]}>
-            <MaterialIcons
-              name={isCompact ? 'shopping-cart' : 'add'}
-              size={18}
-              color="#ffffff"
-            />
-          </TouchableOpacity>
+          addDisabled ? (
+            <View style={[styles.addButton, styles.addButtonDisabled]}>
+              <Text style={styles.addButtonDisabledText}>Hết hàng</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => onAddPress?.()}
+              style={[styles.addButton, { backgroundColor: theme.primary }]}>
+              <MaterialIcons
+                name={isCompact ? 'shopping-cart' : 'add'}
+                size={18}
+                color="#ffffff"
+              />
+            </TouchableOpacity>
+          )
         ) : null}
       </View>
     </TouchableOpacity>
@@ -203,6 +212,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addButtonDisabled: {
+    backgroundColor: '#e5e7eb',
+    minWidth: 64,
+  },
+  addButtonDisabledText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#9ca3af',
   },
   imageWrapCompact: {
     marginBottom: 6,

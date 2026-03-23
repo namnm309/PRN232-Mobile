@@ -21,6 +21,7 @@ import {
   filterProductsByOrigin,
   filterProductsByProvider,
   selectDefaultOrigin,
+  isProductOutOfStock,
   type Product,
   getPrimaryImageUrl,
 } from '@/lib/productsApi';
@@ -134,6 +135,7 @@ export default function HomeScreen() {
   const productsForFiltering = filteredBySearch.slice(3);
 
   const handleAddToCart = (product: Product) => {
+    if (isProductOutOfStock(product)) return;
     const variant = product.productVariants?.[0];
     const variantId = variant?.variantId;
     const imageUrl = getPrimaryImageUrl(product.productImages);
@@ -246,6 +248,7 @@ export default function HomeScreen() {
                   image={cardData.image}
                   badge={cardData.badge}
                   showAddButton
+                  addDisabled={isProductOutOfStock(product)}
                   onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
                   onAddPress={() => handleAddToCart(product)}
                 />
@@ -282,6 +285,7 @@ export default function HomeScreen() {
                     weight={cardData.weight}
                     image={cardData.image}
                     showAddButton
+                    addDisabled={isProductOutOfStock(product)}
                     onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
                     onAddPress={() => handleAddToCart(product)}
                   />
@@ -319,6 +323,7 @@ export default function HomeScreen() {
                     weight={cardData.weight}
                     image={cardData.image}
                     showAddButton
+                    addDisabled={isProductOutOfStock(product)}
                     onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
                     onAddPress={() => handleAddToCart(product)}
                   />
@@ -348,6 +353,7 @@ export default function HomeScreen() {
                   weight={cardData.weight}
                   image={cardData.image}
                   showAddButton
+                  addDisabled={isProductOutOfStock(product)}
                   onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
                   onAddPress={() => handleAddToCart(product)}
                 />

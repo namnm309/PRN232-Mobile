@@ -66,6 +66,8 @@ export default function ThankYouScreen() {
 
   const isVnPaySuccess = order?.vnPayStatus?.toLowerCase() === 'success' || order?.vnPayStatus?.toLowerCase() === 'paid';
   const isCod = !order?.vnPayStatus || order.vnPayStatus === 'NotApplicable';
+  const vnPayLower = order?.vnPayStatus?.toLowerCase();
+  const isVnPayFailed = vnPayLower === 'failed' || vnPayLower === 'cancelled' || vnPayLower === 'cancel';
 
   const getMessage = () => {
     if (loading) return 'Đang kiểm tra...';
@@ -73,12 +75,14 @@ export default function ThankYouScreen() {
     if (!orderId) return 'Thiếu thông tin đơn hàng.';
     if (isCod) return 'Đơn hàng đã được đặt thành công!';
     if (isVnPaySuccess) return 'Thanh toán VNPay thành công! Đơn hàng của bạn đã được xác nhận.';
+    if (isVnPayFailed) return 'Thanh toán VNPay chưa thành công. Đơn hàng đang chờ. Bạn có thể thanh toán lại trong chi tiết đơn hàng.';
     return 'Đơn hàng đã được tạo. Bạn có thể kiểm tra trạng thái thanh toán VNPay trong chi tiết đơn hàng.';
   };
 
   const getIcon = () => {
     if (loading) return null;
     if (error) return 'error-outline';
+    if (isVnPayFailed) return 'warning';
     return 'check-circle';
   };
 
@@ -91,9 +95,9 @@ export default function ThankYouScreen() {
           <ActivityIndicator size="large" color={theme.primary} style={styles.loader} />
         ) : (
           <MaterialIcons
-            name={getIcon() as 'check-circle' | 'error-outline'}
+            name={getIcon() as 'check-circle' | 'error-outline' | 'warning'}
             size={72}
-            color={error ? '#ef4444' : theme.primary}
+            color={error ? '#ef4444' : isVnPayFailed ? '#f59e0b' : theme.primary}
             style={styles.icon}
           />
         )}

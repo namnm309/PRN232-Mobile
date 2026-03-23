@@ -22,6 +22,7 @@ import {
   getProducts,
   mapProductToCardData,
   getPrimaryImageUrl,
+  isProductOutOfStock,
   type Product,
 } from '@/lib/productsApi';
 import { config } from '@/lib/config';
@@ -150,6 +151,7 @@ export default function MarketScreen() {
   }, [productsInCategory, search]);
 
   const handleAddToCart = (product: Product) => {
+    if (isProductOutOfStock(product)) return;
     const variant = product.productVariants?.[0];
     const variantId = variant?.variantId;
     const imageUrl = getPrimaryImageUrl(product.productImages);
@@ -308,6 +310,7 @@ export default function MarketScreen() {
                         image={cardData.image}
                         variant="compact"
                         showAddButton
+                        addDisabled={isProductOutOfStock(product)}
                         onPress={() => {}}
                         onAddPress={() => handleAddToCart(product)}
                       />

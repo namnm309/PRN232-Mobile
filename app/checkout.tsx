@@ -62,20 +62,60 @@ export default function CheckoutScreen() {
   const syncCartAndPreview = useCallback(async () => {
     if (!token || items.length === 0) return;
     try {
-      const resolvedItems: Array<{ variantId: string; quantity: number }> = [];
+      const resolvedItems: Array<{ variantId: string; quantity: number; productName: string }> = [];
+      const invalidNames: string[] = [];
+
       for (const item of items) {
         let vid = item.variantId;
-        if (!vid) {
-          const prodRes = await getProductById(item.productId, token);
-          const v = prodRes.success && prodRes.data?.productVariants?.[0];
-          if (v) vid = v.variantId;
+        let productName = item.name;
+        let stockOk = true;
+
+        const prodRes = await getProductById(item.productId, token);
+        const prod = prodRes.success ? prodRes.data : null;
+
+        if (!prod) {
+          invalidNames.push(productName);
+          continue;
         }
-        if (!vid) {
+        productName = prod.productName ?? productName;
+
+        if (prod.isDeleted) {
+          invalidNames.push(productName);
+          continue;
+        }
+        const statusLower = prod.status?.toLowerCase() ?? '';
+        if (['inactive', 'deleted', 'discontinued', 'outofstock'].includes(statusLower)) {
+          invalidNames.push(productName);
+          continue;
+        }
+
+        const variant = prod.productVariants?.[0] ?? prod.productVariants?.find((v) => v.variantId === vid);
+        if (!variant) {
           const varRes = await getProductVariants(token);
           const v = varRes.success && varRes.data?.find((x) => x.productId === item.productId);
           if (v) vid = v.variantId;
+        } else {
+          vid = variant.variantId;
+          if (variant.stockQuantity != null && variant.stockQuantity < item.quantity) {
+            stockOk = false;
+            invalidNames.push(`${productName} (hết hàng, còn ${variant.stockQuantity})`);
+          }
         }
-        if (vid) resolvedItems.push({ variantId: vid, quantity: item.quantity });
+
+        if (!vid) {
+          invalidNames.push(productName);
+          continue;
+        }
+        if (stockOk) {
+          resolvedItems.push({ variantId: vid, quantity: item.quantity, productName });
+        }
+      }
+
+      if (invalidNames.length > 0) {
+        setError(
+          `Sản phẩm không còn khả dụng: ${invalidNames.join(', ')}. Vui lòng xóa khỏi giỏ hàng và thử lại.`
+        );
+        return;
       }
       if (resolvedItems.length === 0) {
         setError('Không thể xác định biến thể sản phẩm. Vui lòng xóa và thêm lại từ trang chủ/danh mục.');
@@ -96,10 +136,15 @@ export default function CheckoutScreen() {
         return;
       }
       const addr = selectedAddress;
-      // Dùng GHN_DEFAULT cho tính phí ship (địa chỉ hardcode dùng mã khác GHN)
-      const provinceId = GHN_DEFAULT.provinceId;
-      const districtId = GHN_DEFAULT.districtId;
-      const wardCode = GHN_DEFAULT.wardCode;
+      // Dùng địa chỉ đã chọn nếu có đủ GHN IDs; fallback GHN_DEFAULT (TP.HCM)
+      const hasGhnAddress =
+        addr?.provinceId != null &&
+        addr?.districtId != null &&
+        addr?.wardCode != null &&
+        addr?.wardCode.trim() !== '';
+      const provinceId = hasGhnAddress ? addr!.provinceId! : GHN_DEFAULT.provinceId;
+      const districtId = hasGhnAddress ? addr!.districtId! : GHN_DEFAULT.districtId;
+      const wardCode = hasGhnAddress ? addr!.wardCode! : GHN_DEFAULT.wardCode;
       const insuranceValue = Math.min(subtotal, 5_000_000);
       const p = await previewCheckout(token, {
         cartItemIds,
@@ -111,8 +156,13 @@ export default function CheckoutScreen() {
       });
       setPreview(p);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Không thể tải xem trước đơn hàng.';
       console.error('Preview error:', e);
-      setError(e instanceof Error ? e.message : 'Không thể tải xem trước đơn hàng.');
+      setError(
+        msg.toLowerCase().includes('no longer available') || msg.toLowerCase().includes('không còn khả dụng')
+          ? 'Một số sản phẩm trong giỏ không còn khả dụng (hết hàng hoặc ngừng bán). Vui lòng quay lại giỏ hàng để xóa và thử lại.'
+          : msg
+      );
     }
   }, [token, items, selectedAddress, subtotal, voucherCode]);
 
@@ -146,7 +196,18 @@ export default function CheckoutScreen() {
     setError(null);
     try {
       const cartItemIds = preview.items.map((i) => i.cartItemId);
-      // Dùng GHN_DEFAULT cho API (địa chỉ hardcode dùng mã khác GHN)
+      const hasGhnAddress =
+        selectedAddress.provinceId != null &&
+        selectedAddress.districtId != null &&
+        selectedAddress.wardCode != null &&
+        selectedAddress.wardCode.trim() !== '';
+      const provinceCode = hasGhnAddress && selectedAddress.provinceCode
+        ? selectedAddress.provinceCode
+        : GHN_DEFAULT.provinceCode;
+      const provinceId = hasGhnAddress ? selectedAddress.provinceId! : GHN_DEFAULT.provinceId;
+      const toDistrictId = hasGhnAddress ? selectedAddress.districtId! : GHN_DEFAULT.districtId;
+      const toWardCode = hasGhnAddress ? selectedAddress.wardCode! : GHN_DEFAULT.wardCode;
+
       const result = await checkout(token, {
         cartItemIds,
         shippingAddress: selectedAddress.fullAddress,
@@ -154,10 +215,10 @@ export default function CheckoutScreen() {
         paymentMethod,
         recipientName: selectedAddress.recipientName,
         recipientPhone: selectedAddress.phone,
-        provinceCode: GHN_DEFAULT.provinceCode,
-        provinceId: GHN_DEFAULT.provinceId,
-        toWardCode: GHN_DEFAULT.wardCode,
-        toDistrictId: GHN_DEFAULT.districtId,
+        provinceCode,
+        provinceId,
+        toWardCode,
+        toDistrictId,
         insuranceValue: Math.min(subtotal, 5_000_000),
         voucherCode: voucherCode || undefined,
       });
@@ -240,6 +301,18 @@ export default function CheckoutScreen() {
               </TouchableOpacity>
             </>
           )}
+          {selectedAddress &&
+            addresses.length > 0 &&
+            !(
+              selectedAddress.provinceId != null &&
+              selectedAddress.districtId != null &&
+              selectedAddress.wardCode != null &&
+              String(selectedAddress.wardCode).trim() !== ''
+            ) && (
+              <Text style={[styles.addrHint, { color: theme.textSecondary ?? '#6b7280' }]}>
+                Địa chỉ chưa có Tỉnh/Quận/Xã từ danh sách. Phí ship tính theo TP.HCM. Cập nhật địa chỉ để tính chính xác.
+              </Text>
+            )}
         </View>
 
         {/* Hình thức thanh toán */}
@@ -312,7 +385,7 @@ export default function CheckoutScreen() {
                 <Text style={[styles.summaryValue, { color: theme.text }]}>{formatPrice(preview.shippingFee)}</Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryTotal]}>
-                <Text style={styles.summaryTotalLabel}>Tổng thanh toán</Text>
+                <Text style={[styles.summaryTotalLabel, { color: theme.text }]}>Tổng thanh toán</Text>
                 <Text style={[styles.summaryTotalValue, { color: theme.primary }]}>{formatPrice(preview.finalAmount)}</Text>
               </View>
             </>
@@ -320,7 +393,16 @@ export default function CheckoutScreen() {
         </View>
 
         {error ? (
-          <Text style={styles.errText}>{error}</Text>
+          <View style={styles.errorBox}>
+            <Text style={styles.errText}>{error}</Text>
+            <TouchableOpacity
+              onPress={() => router.replace('/(tabs)/orders')}
+              style={[styles.backToCartBtn, { borderColor: theme.primary }]}
+              activeOpacity={0.8}>
+              <MaterialIcons name="shopping-cart" size={18} color={theme.primary} />
+              <Text style={[styles.backToCartText, { color: theme.primary }]}>Quay lại giỏ hàng</Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
 
         <View style={styles.spacer} />
@@ -391,6 +473,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   changeAddrText: { fontSize: 14, fontWeight: '500' },
+  addrHint: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   payRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,10 +504,22 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 14, color: '#6b7280' },
   summaryValue: { fontSize: 14, fontWeight: '500' },
   summaryTotal: { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 8, paddingTop: 12 },
-  summaryTotalLabel: { fontSize: 16, fontWeight: '700', color: '#111' },
+  summaryTotalLabel: { fontSize: 16, fontWeight: '700' },
   summaryTotalValue: { fontSize: 16, fontWeight: '700' },
   loader: { paddingVertical: 24 },
-  errText: { fontSize: 13, color: '#ef4444', marginBottom: 12 },
+  errorBox: { marginBottom: 12 },
+  errText: { fontSize: 13, color: '#ef4444', marginBottom: 8 },
+  backToCartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+  },
+  backToCartText: { fontSize: 14, fontWeight: '600' },
   spacer: { height: 24 },
   footer: {
     position: 'absolute',

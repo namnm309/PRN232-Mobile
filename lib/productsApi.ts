@@ -297,6 +297,19 @@ export function filterProductsByProvider(products: Product[], providerName: stri
 }
 
 /**
+ * Kiểm tra sản phẩm hết hàng (dùng để disable nút thêm vào giỏ).
+ * Trả về true khi: isDeleted, hoặc stockQuantity === 0.
+ * Khi không có variant hoặc stockQuantity undefined (BE list có thể không trả) → coi như còn hàng.
+ */
+export function isProductOutOfStock(product: Product): boolean {
+  if (product.isDeleted) return true;
+  const variant = product.productVariants?.[0];
+  if (!variant) return false; // Không có dữ liệu → cho phép thêm, BE sẽ validate
+  if (variant.stockQuantity != null && variant.stockQuantity <= 0) return true;
+  return false;
+}
+
+/**
  * Select default origin with priority: user location > random
  * @param origins - List of available origins
  * @param userLocation - User's location/city (optional, e.g., "Tiền Giang")

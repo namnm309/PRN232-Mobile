@@ -1,8 +1,9 @@
-import { addressData } from './addressData';
+import { locationsApi } from './locationsApi';
 
 export type GhnProvince = {
   provinceID: number;
   provinceName: string;
+  code?: string | null;
 };
 
 export type GhnDistrict = {
@@ -17,12 +18,30 @@ export type GhnWard = {
   wardName: string;
 };
 
-/** Dùng dữ liệu địa chỉ hardcoded (API GHN đang không khả dụng) */
+/** Gọi BE /api/locations (dữ liệu GHN) - dùng cho address picker và tính phí ship */
 export const ghnApi = {
-  getProvinces: (): Promise<GhnProvince[]> =>
-    Promise.resolve(addressData.getProvinces()),
-  getDistricts: (provinceId: number): Promise<GhnDistrict[]> =>
-    Promise.resolve(addressData.getDistricts(provinceId)),
-  getWards: (districtId: number): Promise<GhnWard[]> =>
-    Promise.resolve(addressData.getWards(districtId)),
+  getProvinces: async (): Promise<GhnProvince[]> => {
+    const list = await locationsApi.getProvinces();
+    return list.map((p) => ({
+      provinceID: p.provinceId,
+      provinceName: p.provinceName,
+      code: p.code,
+    }));
+  },
+  getDistricts: async (provinceId: number): Promise<GhnDistrict[]> => {
+    const list = await locationsApi.getDistricts(provinceId);
+    return list.map((d) => ({
+      districtID: d.districtId,
+      provinceID: d.provinceId,
+      districtName: d.districtName,
+    }));
+  },
+  getWards: async (districtId: number): Promise<GhnWard[]> => {
+    const list = await locationsApi.getWards(districtId);
+    return list.map((w) => ({
+      wardCode: w.wardCode,
+      districtID: w.districtId,
+      wardName: w.wardName,
+    }));
+  },
 };

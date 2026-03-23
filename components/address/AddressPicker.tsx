@@ -16,6 +16,7 @@ import { ghnApi, type GhnProvince, type GhnDistrict, type GhnWard } from '@/lib/
 type AddressPickerValue = {
   provinceId?: number;
   provinceName?: string;
+  provinceCode?: string | null;
   districtId?: number;
   districtName?: string;
   wardCode?: string;
@@ -213,6 +214,7 @@ export function AddressPicker({ value, onChange, error }: AddressPickerProps) {
             ...value,
             provinceId: p?.provinceID,
             provinceName: p?.provinceName,
+            provinceCode: p?.code,
             districtId: undefined,
             districtName: undefined,
             wardCode: undefined,

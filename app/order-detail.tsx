@@ -50,6 +50,16 @@ const STATUS_LABELS: Record<string, string> = {
   DeliveryFailed: 'Giao hàng thất bại',
 };
 
+const VNPAY_STATUS_LABELS: Record<string, string> = {
+  NotApplicable: 'COD - Không áp dụng',
+  Pending: 'Chờ thanh toán',
+  Success: 'Đã thanh toán',
+  Paid: 'Đã thanh toán',
+  Failed: 'Thanh toán thất bại',
+  Cancelled: 'Đã hủy',
+  Cancel: 'Đã hủy',
+};
+
 const GHN_TRACKING_BASE = 'https://tracking.ghn.dev/?order_code=';
 
 export default function OrderDetailScreen() {
@@ -199,6 +209,14 @@ export default function OrderDetailScreen() {
             <Text style={[styles.label, { color: theme.text }]}>Trạng thái</Text>
             <Text style={[styles.statusText, { color: theme.primary }]}>{statusLabel}</Text>
           </View>
+          {order.vnPayStatus && order.vnPayStatus !== 'NotApplicable' && (
+            <View style={styles.row}>
+              <Text style={[styles.label, { color: theme.text }]}>Thanh toán VNPay</Text>
+              <Text style={[styles.statusText, { color: theme.primary }]}>
+                {VNPAY_STATUS_LABELS[order.vnPayStatus] ?? order.vnPayStatus}
+              </Text>
+            </View>
+          )}
           {order.shipment?.ghnOrderCode && (
             <>
               <View style={styles.row}>

@@ -193,11 +193,12 @@ export default function CartScreen() {
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Phí giao hàng</Text>
+                <Text style={styles.summaryLabel}>Phí giao hàng (ước tính)</Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>
                   {formatPrice(shippingFeeDisplay)}
                 </Text>
               </View>
+              <Text style={styles.summaryNote}>Phí ship & mã giảm giá sẽ tính chính xác khi đặt hàng</Text>
               <View style={[styles.summaryRow, styles.summaryRowTotal]}>
                 <Text style={styles.summaryLabelTotal}>Tổng cộng</Text>
                 <Text style={[styles.summaryValueTotal, { color: theme.primary }]}>
@@ -377,6 +378,12 @@ const styles = StyleSheet.create({
     borderTopColor: '#e5e7eb',
     marginTop: 6,
     paddingTop: 10,
+  },
+  summaryNote: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   summaryLabelTotal: {
     fontSize: 16,
