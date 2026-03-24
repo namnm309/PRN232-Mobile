@@ -19,6 +19,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: theme.tabInactive,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: { position: 'absolute', borderTopWidth: 0, elevation: 0 },
       }}>
       <Tabs.Screen
         name="index"

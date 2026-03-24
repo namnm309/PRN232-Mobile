@@ -11,6 +11,8 @@ type SearchBarProps = {
   placeholder?: string;
   showFilter?: boolean;
   onPressFilter?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 export function SearchBar({
@@ -19,6 +21,8 @@ export function SearchBar({
   placeholder,
   showFilter,
   onPressFilter,
+  onFocus,
+  onBlur,
 }: SearchBarProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
@@ -30,6 +34,8 @@ export function SearchBar({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholderTextColor={theme.tabInactive}
         style={styles.input}
         autoCorrect={false}

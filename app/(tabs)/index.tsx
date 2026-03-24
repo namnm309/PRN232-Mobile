@@ -8,6 +8,7 @@ import { CategoryGrid } from '@/components/home/CategoryGrid';
 import { PromoBanners } from '@/components/home/PromoBanners';
 import { ProductCard } from '@/components/ui/ProductCard';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { SearchDropdown } from '@/components/home/SearchDropdown';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { FilterDropdown } from '@/components/ui/FilterDropdown';
 import { InlineSectionFilter } from '@/components/ui/InlineSectionFilter';
@@ -51,6 +52,7 @@ export default function HomeScreen() {
   // Dropdown selections
   const [selectedOrigin, setSelectedOrigin] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -185,22 +187,37 @@ export default function HomeScreen() {
   }, [productsForFiltering, selectedOrigin, selectedProvider, originFilteredProducts, providerFilteredProducts]);
 
   return (
-    <ScreenContainer>
-      <HomeHeader address={defaultAddress} />
+    <ScreenContainer noPadding contentContainerStyle={{ paddingBottom: 40 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, zIndex: 100 }}>
+        <HomeHeader address={defaultAddress} />
 
-      <SearchBar
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Bạn muốn tìm gì hôm nay?"
-        showFilter
-      />
+        <View style={{ zIndex: 1000 }}>
+          <SearchBar
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Bạn muốn tìm gì hôm nay?"
+            showFilter
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => {
+              // Delay hide to allow clicks on dropdown
+              setTimeout(() => setIsSearchFocused(false), 500);
+            }}
+          />
 
-      <PromoBanners
-        onPrimaryPress={() => router.push('/(tabs)/market')}
-        onSecondaryPress={() => router.push('/(tabs)/market')}
-      />
+          <SearchDropdown
+            results={filteredBySearch}
+            visible={isSearchFocused && search.trim().length > 0}
+            onSelect={() => setSearch('')}
+          />
+        </View>
 
-      <CategoryGrid onCategoryPress={(id) => router.push(`/(tabs)/market?category=${id}`)} />
+        <PromoBanners
+          onPrimaryPress={() => router.push('/(tabs)/market')}
+          onSecondaryPress={() => router.push('/(tabs)/market')}
+        />
+
+        <CategoryGrid onCategoryPress={(id) => router.push(`/(tabs)/market?category=${id}`)} />
+      </View>
 
       {/* Loading state */}
       {loading && (
@@ -237,12 +254,14 @@ export default function HomeScreen() {
       {/* Featured Products Section */}
       {!loading && !error && featuredProducts.length > 0 && (
         <>
-          <SectionHeader title="Sản phẩm mới" onPressSeeAll={() => router.push('/(tabs)/market')} />
+          <View style={{ paddingHorizontal: 16 }}>
+            <SectionHeader title="Sản phẩm mới" onPressSeeAll={() => router.push('/(tabs)/market')} />
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.horizontalRow}
-            contentContainerStyle={styles.horizontalContent}>
+            contentContainerStyle={[styles.horizontalContent, { paddingHorizontal: 16 }]}>
             {featuredProducts.map((product) => {
               const cardData = mapProductToCardData(product, 'Mới');
               return (
@@ -267,20 +286,22 @@ export default function HomeScreen() {
       {/* Origin Section with Inline Dropdown Filter */}
       {!loading && !error && availableOrigins.length > 0 && (
         <>
-          <InlineSectionFilter
-            title="Sản phẩm từ"
-            options={availableOrigins}
-            selectedValue={selectedOrigin}
-            onValueChange={setSelectedOrigin}
-            placeholder="Chọn nguồn gốc"
-            onPressSeeAll={selectedOrigin ? () => setSelectedOrigin(null) : undefined}
-          />
+          <View style={{ paddingHorizontal: 16 }}>
+            <InlineSectionFilter
+              title="Sản phẩm từ"
+              options={availableOrigins}
+              selectedValue={selectedOrigin}
+              onValueChange={setSelectedOrigin}
+              placeholder="Chọn nguồn gốc"
+              onPressSeeAll={selectedOrigin ? () => setSelectedOrigin(null) : undefined}
+            />
+          </View>
           {selectedOrigin && originFilteredProducts.length > 0 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.horizontalRow}
-              contentContainerStyle={styles.horizontalContent}>
+              contentContainerStyle={[styles.horizontalContent, { paddingHorizontal: 16 }]}>
               {originFilteredProducts.map((product) => {
                 const cardData = mapProductToCardData(product);
                 return (
@@ -305,20 +326,22 @@ export default function HomeScreen() {
       {/* Provider Section with Inline Dropdown Filter */}
       {!loading && !error && availableProviders.length > 0 && (
         <>
-          <InlineSectionFilter
-            title="Sản phẩm từ nhà cung cấp"
-            options={availableProviders}
-            selectedValue={selectedProvider}
-            onValueChange={setSelectedProvider}
-            placeholder="Chọn nhà cung cấp"
-            onPressSeeAll={selectedProvider ? () => setSelectedProvider(null) : undefined}
-          />
+          <View style={{ paddingHorizontal: 16 }}>
+            <InlineSectionFilter
+              title="Sản phẩm từ nhà cung cấp"
+              options={availableProviders}
+              selectedValue={selectedProvider}
+              onValueChange={setSelectedProvider}
+              placeholder="Chọn nhà cung cấp"
+              onPressSeeAll={selectedProvider ? () => setSelectedProvider(null) : undefined}
+            />
+          </View>
           {selectedProvider && providerFilteredProducts.length > 0 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.horizontalRow}
-              contentContainerStyle={styles.horizontalContent}>
+              contentContainerStyle={[styles.horizontalContent, { paddingHorizontal: 16 }]}>
               {providerFilteredProducts.map((product) => {
                 const cardData = mapProductToCardData(product);
                 return (
@@ -343,12 +366,14 @@ export default function HomeScreen() {
       {/* Suggested Products */}
       {!loading && !error && suggestedProducts.length > 0 && (
         <>
-          <SectionHeader title="Gợi ý cho bạn" />
+          <View style={{ paddingHorizontal: 16 }}>
+            <SectionHeader title="Gợi ý cho bạn" />
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.horizontalRow}
-            contentContainerStyle={styles.horizontalContent}>
+            contentContainerStyle={[styles.horizontalContent, { paddingHorizontal: 16 }]}>
             {suggestedProducts.map((product) => {
               const cardData = mapProductToCardData(product);
               return (
