@@ -7,6 +7,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ToastAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -171,6 +174,12 @@ export default function MarketScreen() {
       image: imageSource,
       weight: product.unit || product.origin || undefined,
     });
+    
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Đã thêm sản phẩm vào giỏ hàng', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Thành công', 'Đã thêm sản phẩm vào giỏ hàng');
+    }
   };
 
   // Chỉ hiển thị sản phẩm thuộc danh mục đã chọn (+ lọc search)
@@ -311,7 +320,7 @@ export default function MarketScreen() {
                         variant="compact"
                         showAddButton
                         addDisabled={isProductOutOfStock(product)}
-                        onPress={() => {}}
+                        onPress={() => router.push(`/product/${product.productId}` as any)}
                         onAddPress={() => handleAddToCart(product)}
                       />
                     </View>

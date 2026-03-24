@@ -17,25 +17,45 @@ import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { useCart, type CartItem } from '@/context/CartContext';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
+
+import { useAuth } from '@/context/AuthContext';
+import { GHN_DEFAULT } from '@/constants/ghnDefaults';
+import { clearBeCart, addCartItem } from '@/lib/cartApi';
+import { previewCheckout } from '@/lib/checkoutApi';
+import { getProductById, getProductVariants } from '@/lib/productsApi';
+import { applyVoucher } from '@/lib/vouchers';
 
 const formatPrice = (v: number) => `${v.toLocaleString('vi-VN')}đ`;
 
-const SHIPPING_FEE = 15000;
 const PLACEHOLDER_IMAGE = require('@/assets/images/splash-icon.png');
-
-import { applyVoucher } from '@/lib/vouchers';
 
 export default function CartScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const { items, updateQuantity, subtotal } = useCart();
+  const { token } = useAuth();
+  
   const [voucherCode, setVoucherCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  
+  const [estimatedShippingFee, setEstimatedShippingFee] = useState(0);
+  const [isEstimatingConfig, setIsEstimatingConfig] = useState(false);
+  const [estimationError, setEstimationError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, [])
+  );
 
   const handleApplyVoucher = () => {
-    const result = applyVoucher(voucherCode, subtotal, SHIPPING_FEE);
+    const result = applyVoucher(voucherCode, subtotal, estimatedShippingFee);
     if (result.success) {
       setAppliedDiscount(result.discount);
       setAppliedCode(voucherCode.trim().toUpperCase());
@@ -69,11 +89,116 @@ export default function CartScreen() {
     }
   };
 
-  const shippingFeeDisplay = items.length > 0 ? SHIPPING_FEE : 0;
+  React.useEffect(() => {
+    let mounted = true;
+    
+    if (!isFocused || items.length === 0 || !token) {
+       setEstimatedShippingFee(0);
+       setEstimationError(null);
+       return;
+    }
+
+    const estimateFee = async () => {
+      setIsEstimatingConfig(true);
+      setEstimationError(null);
+      try {
+        const resolvedItems: Array<{variantId: string; quantity: number}> = [];
+        const invalidNames: string[] = [];
+        for (const item of items) {
+          if (!mounted) return;
+          let vid = item.variantId;
+          
+          try {
+            const prodRes = await getProductById(item.productId, token);
+            if (!mounted) return;
+            const prod = prodRes.success ? prodRes.data : null;
+            
+            if (!prod || prod.isDeleted || ['inactive', 'deleted', 'discontinued', 'outofstock'].includes(prod.status?.toLowerCase() ?? '')) {
+              invalidNames.push(item.name);
+              continue;
+            }
+
+            if (!vid) {
+               const varRes = await getProductVariants(token);
+               if (!mounted) return;
+               const v = varRes.success && varRes.data?.find((x) => x.productId === item.productId);
+               if (v) vid = v.variantId;
+            }
+            if (vid) {
+              resolvedItems.push({ variantId: vid, quantity: item.quantity });
+            }
+          } catch (err) {
+            invalidNames.push(item.name);
+          }
+        }
+        
+        if (invalidNames.length > 0) {
+           if (mounted) {
+              setIsEstimatingConfig(false);
+              setEstimatedShippingFee(0);
+              setEstimationError(`Hết hàng: ${invalidNames.join(', ')}`);
+           }
+           return;
+        }
+
+        if (resolvedItems.length === 0) {
+          if (mounted) { setIsEstimatingConfig(false); setEstimatedShippingFee(0); }
+          return;
+        }
+
+        await clearBeCart(token);
+        if (!mounted) return;
+        
+        const cartItemIds: string[] = [];
+        for (const item of resolvedItems) {
+            if (!mounted) return;
+            const cart = await addCartItem(token, {
+              variantId: item.variantId,
+              quantity: item.quantity,
+            });
+            const added = cart.cartItems.find((c) => c.variantId === item.variantId);
+            if (added) cartItemIds.push(added.cartItemId);
+        }
+
+        if (!mounted) return;
+        
+        if (cartItemIds.length > 0) {
+             const p = await previewCheckout(token, {
+                cartItemIds,
+                provinceId: GHN_DEFAULT.provinceId,
+                toDistrictId: GHN_DEFAULT.districtId,
+                toWardCode: GHN_DEFAULT.wardCode,
+                insuranceValue: Math.min(subtotal, 5_000_000),
+              });
+              if (!mounted) return;
+              
+              setEstimatedShippingFee(p.shippingFee);
+              setEstimationError(null);
+        }
+      } catch(e: any) {
+         console.log('Estimation error', e);
+         if (mounted) {
+            setEstimatedShippingFee(0);
+            setEstimationError(e.message || 'Lỗi mạng');
+         }
+      } finally {
+         if (mounted) setIsEstimatingConfig(false);
+      }
+    };
+    
+    // Quick debounce to avoid spamming the backend
+    const timeoutId = setTimeout(estimateFee, 800);
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [items, subtotal, token, isFocused]);
+
+  const shippingFeeDisplay = items.length > 0 ? estimatedShippingFee : 0;
   const total = useMemo(() => {
     if (items.length === 0) return 0;
-    return Math.max(0, subtotal - appliedDiscount + SHIPPING_FEE);
-  }, [items.length, subtotal, appliedDiscount]);
+    return Math.max(0, subtotal - appliedDiscount + estimatedShippingFee);
+  }, [items.length, subtotal, appliedDiscount, estimatedShippingFee]);
 
   const getImageSource = (item: CartItem) => {
     if (typeof item.image === 'object' && item.image?.uri) {
@@ -194,9 +319,19 @@ export default function CartScreen() {
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Phí giao hàng (ước tính)</Text>
-                <Text style={[styles.summaryValue, { color: theme.text }]}>
-                  {formatPrice(shippingFeeDisplay)}
-                </Text>
+                {isEstimatingConfig ? (
+                  <Text style={[styles.summaryValue, { color: theme.text, fontStyle: 'italic' }]}>
+                    Đang tính...
+                  </Text>
+                ) : estimationError ? (
+                  <Text style={[styles.summaryValue, { color: '#ef4444' }]}>
+                    {estimationError}
+                  </Text>
+                ) : (
+                  <Text style={[styles.summaryValue, { color: theme.text }]}>
+                    {formatPrice(shippingFeeDisplay)}
+                  </Text>
+                )}
               </View>
               <Text style={styles.summaryNote}>Phí ship & mã giảm giá sẽ tính chính xác khi đặt hàng</Text>
               <View style={[styles.summaryRow, styles.summaryRowTotal]}>

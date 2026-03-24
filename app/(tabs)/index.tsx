@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ScrollView, StyleSheet, View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, ToastAndroid, Platform, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { HomeHeader } from '@/components/layout/HomeHeader';
@@ -151,6 +151,12 @@ export default function HomeScreen() {
       image: imageSource,
       weight: product.unit || product.origin || undefined,
     });
+    
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Đã thêm sản phẩm vào giỏ hàng', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Thành công', 'Đã thêm sản phẩm vào giỏ hàng');
+    }
   };
 
   // Filtered products by origin
@@ -249,7 +255,7 @@ export default function HomeScreen() {
                   badge={cardData.badge}
                   showAddButton
                   addDisabled={isProductOutOfStock(product)}
-                  onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                  onPress={() => router.push(`/product/${product.productId}` as any)}
                   onAddPress={() => handleAddToCart(product)}
                 />
               );
@@ -286,7 +292,7 @@ export default function HomeScreen() {
                     image={cardData.image}
                     showAddButton
                     addDisabled={isProductOutOfStock(product)}
-                    onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                    onPress={() => router.push(`/product/${product.productId}` as any)}
                     onAddPress={() => handleAddToCart(product)}
                   />
                 );
@@ -324,7 +330,7 @@ export default function HomeScreen() {
                     image={cardData.image}
                     showAddButton
                     addDisabled={isProductOutOfStock(product)}
-                    onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                    onPress={() => router.push(`/product/${product.productId}` as any)}
                     onAddPress={() => handleAddToCart(product)}
                   />
                 );
@@ -354,7 +360,7 @@ export default function HomeScreen() {
                   image={cardData.image}
                   showAddButton
                   addDisabled={isProductOutOfStock(product)}
-                  onPress={() => router.push(`/(tabs)/market?product=${product.productId}`)}
+                  onPress={() => router.push(`/product/${product.productId}` as any)}
                   onAddPress={() => handleAddToCart(product)}
                 />
               );

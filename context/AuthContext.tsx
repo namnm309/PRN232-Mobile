@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -13,8 +13,8 @@ import {
 } from '@/lib/api';
 import { updateUserMe, extractUser, type UpdateUserRequest } from '@/lib/userApi';
 
-const GOOGLE_CLIENT_ID =
-  '869531482598-t4c2ufqbq0sl42m97eqd7dg5e5vjb7m3.apps.googleusercontent.com';
+// Đảm bảo browser session được hoàn tất khi redirect về app
+WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = '@nongxanh:token';
 const USER_KEY = '@nongxanh:user';
@@ -149,45 +149,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithGoogle = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true }));
     try {
-      // Sử dụng proxy của Expo (auth.expo.io) với project full name @owner/slug
-      const redirectUri = AuthSession.makeRedirectUri({
-        path: 'redirect',
-        // @ts-expect-error projectNameForProxy được hỗ trợ runtime bởi Expo
-        projectNameForProxy: '@namnm309/NongXanh',
-      });
-      const nonce = Math.random().toString(36).substring(2);
+      // 1. Lấy authorization URL từ backend
+      const { authorizationUrl } = await authApi.googleStart();
 
-      const request = new AuthSession.AuthRequest({
-        clientId: GOOGLE_CLIENT_ID,
-        redirectUri,
-        // Google không cho dùng PKCE (code_challenge_method) với flow id_token thuần
-        usePKCE: false,
-        responseType: AuthSession.ResponseType.IdToken,
-        scopes: ['openid', 'email', 'profile'],
-        extraParams: {
-          nonce,
-        },
-      });
+      // 2. Mở browser — backend xử lý Google callback và redirect deep link
+      //    nongxanh://auth/success?token=...&userId=...&email=...&displayName=...
+      //    hoặc nongxanh://auth/error?error=...
+      const result = await WebBrowser.openAuthSessionAsync(
+        authorizationUrl,
+        'nongxanh://'
+      );
 
-      const discovery = {
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-      };
-
-      const result = (await request.promptAsync(discovery)) as AuthSession.AuthSessionResult;
-
-      if (result.type !== 'success' || !('params' in result) || !result.params.id_token) {
+      if (result.type !== 'success' || !result.url) {
         setState((s) => ({ ...s, isLoading: false }));
-        if (result.type === 'error' && 'error' in result && result.error) {
-          throw new Error(result.error.message ?? 'Google login failed');
-        }
-        return;
+        if (result.type === 'cancel' || result.type === 'dismiss') return;
+        throw new Error('Google login failed');
       }
 
-      const idToken = result.params.id_token;
-      const data = await authApi.googleMobileLogin(idToken);
+      // 3. Parse deep link params
+      const url = new URL(result.url);
+      const params = url.searchParams;
 
-      await persistAuth(data);
-      setState((s) => ({ ...s, user: data.user, token: data.accessToken, isLoading: false }));
+      // Check lỗi từ backend
+      const error = params.get('error');
+      if (error) {
+        throw new Error(decodeURIComponent(error));
+      }
+
+      const accessToken = params.get('token');
+      const userId = params.get('userId');
+      const email = params.get('email');
+      const displayName = params.get('displayName');
+
+      if (!accessToken || !userId || !email) {
+        throw new Error('Thiếu thông tin từ server');
+      }
+
+      const user: UserDto = {
+        id: userId,
+        email: decodeURIComponent(email),
+        phoneNumber: null,
+        displayName: displayName ? decodeURIComponent(displayName) : null,
+        provider: 'Google',
+        createdAt: new Date().toISOString(),
+        isActive: true,
+        lastLoginAt: new Date().toISOString(),
+      };
+
+      const authData: AuthResponse = { accessToken, user };
+      await persistAuth(authData);
+      setState((s) => ({ ...s, user, token: accessToken, isLoading: false }));
       router.replace('/(tabs)');
     } catch (e) {
       setState((s) => ({ ...s, isLoading: false }));

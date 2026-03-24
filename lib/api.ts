@@ -56,7 +56,15 @@ async function request<T>(
 
   const res = await fetch(url, { ...init, headers });
   if (res.status === 204) return undefined as T;
-  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // ignore
+  }
+
   if (!res.ok) {
     let message: string =
       (data?.detail as string) ??
@@ -66,13 +74,19 @@ async function request<T>(
     const errArr = data?.errors as string[] | undefined;
     if (Array.isArray(errArr) && errArr.length > 0) {
       message = errArr.join('; ');
-    } else if (typeof message !== 'string') {
-      message = Array.isArray(message) ? message.join('; ') : String(message ?? `HTTP ${res.status}`);
+    } else if (typeof data?.message !== 'string' && Array.isArray(data?.message)) {
+      message = data.message.join('; ');
     }
     if (res.status === 401) {
       message =
         'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng xuất và đăng nhập lại.';
     }
+    
+    console.error(`[API ERROR] URL: ${url} | STATUS: ${res.status} | MSG: ${message}`);
+    if (res.status >= 500) {
+      console.error(`[API RAW RESPONSE]`, text.substring(0, 500));
+    }
+    
     throw new Error(message);
   }
   return data as T;
@@ -100,10 +114,19 @@ export const authApi = {
       body: JSON.stringify({ email }),
     }),
 
+  googleStart: () =>
+    request<GoogleOAuthStartResponse>(getAuthUrl('/google/start'), { method: 'GET' }),
+
   googleMobileLogin: (idToken: string) =>
     request<AuthResponse>(getAuthUrl('/google/mobile'), {
       method: 'POST',
       body: JSON.stringify({ idToken } satisfies GoogleMobileLoginRequest),
+    }),
+
+  googleCallback: (body: GoogleOAuthCallbackRequest) =>
+    request<AuthResponse>(getAuthUrl('/google/callback'), {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
 
   changePassword: (currentPassword: string, newPassword: string, token: string) =>

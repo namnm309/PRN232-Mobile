@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { openBrowserAsync } from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+import { WebView } from 'react-native-webview';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -25,30 +25,9 @@ export default function VnPayPaymentScreen() {
   const paymentUrl = params.url;
   const orderId = params.orderId ?? '';
 
-  const [opening, setOpening] = useState(false);
-
-  const handleOpenPayment = async () => {
-    if (!paymentUrl) return;
-    setOpening(true);
-    try {
-      await openBrowserAsync(String(paymentUrl), {
-        toolbarColor: theme.primary,
-        controlsColor: theme.primary,
-      });
-    } catch {
-      // fallback: open with Linking
-      await Linking.openURL(paymentUrl);
-    } finally {
-      setOpening(false);
-    }
-  };
-
-  const handleDone = () => {
-    router.replace({
-      pathname: '/thank-you',
-      params: { orderId },
-    });
-  };
+  const [loading, setLoading] = useState(true);
+  const webViewRef = useRef<WebView>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   if (!paymentUrl) {
     return (
@@ -62,8 +41,56 @@ export default function VnPayPaymentScreen() {
     );
   }
 
+  const getQueryParam = (url: string, param: string) => {
+    param = param.replace(/[\[\]]/g, '\\$&');
+    const regex = new RegExp('[?&]' + param + '(=([^&#]*)|&|#|$)');
+    const results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, ' '));
+  };
+
+  const handleNavigationStateChange = (navState: any) => {
+    const { url } = navState;
+
+    if (isProcessing) return;
+
+    // The backend redirect URL typically includes 'vnp_ResponseCode'
+    if (url.includes('vnp_ResponseCode=')) {
+      setIsProcessing(true);
+      
+      // Stop WebView from loading the frontend redirect page visually
+      webViewRef.current?.stopLoading();
+      
+      const responseCode = getQueryParam(url, 'vnp_ResponseCode');
+      
+      if (responseCode === '00') {
+        // Success
+        Alert.alert(
+          'Thanh toán thành công',
+          'Đơn hàng của bạn đã được thanh toán qua VNPay thành công.',
+          [{ text: 'Tiếp tục', onPress: () => {
+             router.replace({
+               pathname: '/thank-you',
+               params: { orderId },
+             });
+          }}]
+        );
+      } else {
+        // Failed
+        Alert.alert(
+          'Thanh toán thất bại',
+          'Giao dịch thanh toán bị hủy hoặc đã xảy ra lỗi. Đơn hàng của bạn đã được ghi nhận nhưng chưa thanh toán.',
+          [{ text: 'Đóng', onPress: () => {
+             router.replace('/(tabs)'); 
+          }}]
+        );
+      }
+    }
+  };
+
   return (
-    <ScreenContainer>
+    <ScreenContainer scroll={false}>
       <AppHeader
         title="Thanh toán VNPay"
         left={
@@ -74,32 +101,22 @@ export default function VnPayPaymentScreen() {
       />
 
       <View style={styles.content}>
-        <MaterialIcons name="payment" size={64} color={theme.primary} style={styles.icon} />
-        <Text style={[styles.title, { color: theme.text }]}>Thanh toán qua VNPay</Text>
-        <Text style={styles.desc}>
-          Nhấn nút bên dưới để mở trang thanh toán VNPay. Sau khi thanh toán xong, quay lại app và nhấn "Tôi đã thanh
-          toán xong".
-        </Text>
-
-        <TouchableOpacity
-          onPress={handleOpenPayment}
-          disabled={opening}
-          style={[styles.openBtn, { backgroundColor: theme.primary }]}
-          activeOpacity={0.9}>
-          {opening ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.openBtnText}>Mở trang thanh toán VNPay</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={handleDone}
-          style={[styles.doneBtn, { borderColor: theme.primary }]}
-          activeOpacity={0.8}>
-          <MaterialIcons name="check-circle" size={22} color={theme.primary} />
-          <Text style={[styles.doneBtnText, { color: theme.primary }]}>Tôi đã thanh toán xong</Text>
-        </TouchableOpacity>
+        <WebView
+          ref={webViewRef}
+          source={{ uri: paymentUrl }}
+          style={styles.webview}
+          onNavigationStateChange={handleNavigationStateChange}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+        />
+        {loading && !isProcessing && (
+          <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.text }]}>Đang tải trang thanh toán VNPay...</Text>
+          </View>
+        )}
       </View>
     </ScreenContainer>
   );
@@ -107,36 +124,18 @@ export default function VnPayPaymentScreen() {
 
 const styles = StyleSheet.create({
   headerBtn: { padding: 4 },
-  content: { flex: 1, padding: 24, alignItems: 'center' },
-  icon: { marginBottom: 24 },
-  title: { fontSize: 18, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
-  desc: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-    paddingHorizontal: 8,
-  },
-  openBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  openBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  doneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderWidth: 2,
-    borderRadius: 12,
-  },
-  doneBtnText: { fontSize: 15, fontWeight: '600' },
+  content: { flex: 1, position: 'relative' },
+  webview: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errText: { fontSize: 16, color: '#ef4444', marginTop: 12 },
+  loadingOverlay: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 15,
+    fontWeight: '500',
+  },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -36,9 +37,18 @@ type PaymentMethod = 'COD' | 'VNPay';
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ voucherCode?: string }>();
+  const params = useLocalSearchParams<{
+    voucherCode?: string;
+    buyNowProductId?: string;
+    buyNowVariantId?: string;
+    buyNowQuantity?: string;
+    buyNowProductName?: string;
+    buyNowProductImage?: string;
+    buyNowUnitPrice?: string;
+    buyNowWeight?: string;
+  }>();
   const { token, user } = useAuth();
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, updateQuantity } = useCart();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
@@ -51,6 +61,20 @@ export default function CheckoutScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [buyNowQty, setBuyNowQty] = useState<number>(() => {
+    const defaultQty = parseInt(params.buyNowQuantity || '1', 10);
+    return isNaN(defaultQty) ? 1 : defaultQty;
+  });
+
+  const handleUpdateQuantity = (id: string, delta: number, currentQty: number) => {
+    if (currentQty + delta < 1) return;
+    if (params.buyNowProductId) {
+      setBuyNowQty(currentQty + delta);
+    } else {
+      updateQuantity(id, delta);
+    }
+  };
+
   const loadAddresses = useCallback(async () => {
     if (!user?.id) return;
     const list = await getAddresses(user.id);
@@ -59,18 +83,45 @@ export default function CheckoutScreen() {
     setSelectedAddress(def ?? list[0] ?? null);
   }, [user?.id]);
 
-  const syncCartAndPreview = useCallback(async () => {
-    if (!token || items.length === 0) return;
+  // If Buy Now params exist, construct a temporary single-item cart list
+  const effectiveItems = useMemo(() => {
+    if (params.buyNowProductId) {
+      return [{
+        id: params.buyNowProductId,
+        productId: params.buyNowProductId,
+        variantId: params.buyNowVariantId || undefined,
+        name: params.buyNowProductName || 'Đang tải...',
+        unitPrice: parseInt(params.buyNowUnitPrice || '0', 10),
+        quantity: buyNowQty,
+        image: params.buyNowProductImage ? { uri: params.buyNowProductImage } : null,
+        weight: params.buyNowWeight || undefined
+      }];
+    }
+    return items;
+  }, [items, params.buyNowProductId, params.buyNowVariantId, params.buyNowProductName, params.buyNowUnitPrice, params.buyNowProductImage, params.buyNowWeight, buyNowQty]);
+
+  const effectiveSubtotal = useMemo(() => {
+    if (params.buyNowProductId) {
+       // Estimate subtotal will rely on preview API returning correct TotalAmount
+       return preview?.totalAmount ?? subtotal;
+    }
+    return subtotal;
+  }, [subtotal, params.buyNowProductId, preview?.totalAmount]);
+
+  const syncCartAndPreview = useCallback(async (isMounted: () => boolean) => {
+    if (!token || effectiveItems.length === 0) return;
     try {
       const resolvedItems: Array<{ variantId: string; quantity: number; productName: string }> = [];
       const invalidNames: string[] = [];
 
-      for (const item of items) {
+      for (const item of effectiveItems) {
+        if (!isMounted()) return;
         let vid = item.variantId;
         let productName = item.name;
         let stockOk = true;
 
         const prodRes = await getProductById(item.productId, token);
+        if (!isMounted()) return;
         const prod = prodRes.success ? prodRes.data : null;
 
         if (!prod) {
@@ -89,23 +140,22 @@ export default function CheckoutScreen() {
           continue;
         }
 
-        const variant = prod.productVariants?.[0] ?? prod.productVariants?.find((v) => v.variantId === vid);
-        if (!variant) {
-          const varRes = await getProductVariants(token);
-          const v = varRes.success && varRes.data?.find((x) => x.productId === item.productId);
-          if (v) vid = v.variantId;
-        } else {
-          vid = variant.variantId;
-          if (variant.stockQuantity != null && variant.stockQuantity < item.quantity) {
-            stockOk = false;
-            invalidNames.push(`${productName} (hết hàng, còn ${variant.stockQuantity})`);
-          }
+        let validVariant = prod.productVariants?.find((v) => v.variantId === vid);
+        if (!validVariant && prod.productVariants && prod.productVariants.length > 0) {
+            validVariant = prod.productVariants[0];
         }
 
-        if (!vid) {
+        if (!validVariant) {
           invalidNames.push(productName);
           continue;
         }
+
+        vid = validVariant.variantId;
+        if (validVariant.stockQuantity != null && validVariant.stockQuantity < item.quantity) {
+            stockOk = false;
+            invalidNames.push(`${productName} (hết hàng, còn ${validVariant.stockQuantity})`);
+        }
+
         if (stockOk) {
           resolvedItems.push({ variantId: vid, quantity: item.quantity, productName });
         }
@@ -122,8 +172,11 @@ export default function CheckoutScreen() {
         return;
       }
       await clearBeCart(token);
+      if (!isMounted()) return;
+
       const cartItemIds: string[] = [];
       for (const item of resolvedItems) {
+        if (!isMounted()) return;
         const cart = await addCartItem(token, {
           variantId: item.variantId,
           quantity: item.quantity,
@@ -131,6 +184,9 @@ export default function CheckoutScreen() {
         const added = cart.cartItems.find((c) => c.variantId === item.variantId);
         if (added) cartItemIds.push(added.cartItemId);
       }
+      
+      if (!isMounted()) return;
+      
       if (cartItemIds.length === 0) {
         setError('Không thể đồng bộ giỏ hàng.');
         return;
@@ -145,7 +201,7 @@ export default function CheckoutScreen() {
       const provinceId = hasGhnAddress ? addr!.provinceId! : GHN_DEFAULT.provinceId;
       const districtId = hasGhnAddress ? addr!.districtId! : GHN_DEFAULT.districtId;
       const wardCode = hasGhnAddress ? addr!.wardCode! : GHN_DEFAULT.wardCode;
-      const insuranceValue = Math.min(subtotal, 5_000_000);
+      const insuranceValue = Math.min(effectiveSubtotal > 0 ? effectiveSubtotal : 100000, 5_000_000);
       const p = await previewCheckout(token, {
         cartItemIds,
         provinceId,
@@ -154,8 +210,10 @@ export default function CheckoutScreen() {
         insuranceValue,
         voucherCode: voucherCode || undefined,
       });
+      if (!isMounted()) return;
       setPreview(p);
     } catch (e) {
+      if (!isMounted()) return;
       const msg = e instanceof Error ? e.message : 'Không thể tải xem trước đơn hàng.';
       console.error('Preview error:', e);
       setError(
@@ -169,13 +227,14 @@ export default function CheckoutScreen() {
   useFocusEffect(useCallback(() => void loadAddresses(), [loadAddresses]));
 
   useEffect(() => {
+    let mounted = true;
     if (!token || !user?.id) {
       setLoading(false);
       setError('Vui lòng đăng nhập để đặt hàng.');
       setPreview(null);
       return;
     }
-    if (items.length === 0) {
+    if (effectiveItems.length === 0) {
       setPreview(null);
       setError('Giỏ hàng trống.');
       setLoading(false);
@@ -183,8 +242,12 @@ export default function CheckoutScreen() {
     }
     setLoading(true);
     setError(null);
-    syncCartAndPreview().finally(() => setLoading(false));
-  }, [token, user?.id, items, selectedAddress, voucherCode, syncCartAndPreview]);
+    syncCartAndPreview(() => mounted).finally(() => {
+      if (mounted) setLoading(false);
+    });
+    
+    return () => { mounted = false; };
+  }, [token, user?.id, effectiveItems, selectedAddress, voucherCode, syncCartAndPreview]);
 
   const handleConfirm = async () => {
     if (!token || !user || !selectedAddress || !preview) return;
@@ -365,6 +428,40 @@ export default function CheckoutScreen() {
           ) : null}
         </View>
 
+        {/* Danh sách Sản phẩm */}
+        <View style={[styles.section, { backgroundColor: theme.background }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Sản phẩm ({effectiveItems.length})</Text>
+          {effectiveItems.map((item, index) => (
+            <View key={`${item.id}-${index}`} style={[styles.itemRow, { borderBottomColor: index < effectiveItems.length - 1 ? '#e5e7eb' : 'transparent', borderBottomWidth: index < effectiveItems.length - 1 ? 1 : 0 }]}>
+              <ExpoImage
+                source={typeof item.image === 'object' && item.image?.uri ? item.image : require('@/assets/images/splash-icon.png')}
+                style={styles.itemImage}
+                contentFit="cover"
+              />
+              <View style={styles.itemInfo}>
+                <Text style={[styles.itemName, { color: theme.text }]} numberOfLines={2}>{item.name}</Text>
+                {item.weight ? <Text style={styles.itemWeight}>{item.weight}</Text> : null}
+                <Text style={[styles.itemPrice, { color: theme.primary }]}>{formatPrice(item.unitPrice)}</Text>
+              </View>
+              <View style={styles.qtyContainer}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleUpdateQuantity(item.variantId ?? item.productId, -1, item.quantity)}
+                  style={styles.qtyBtn}>
+                  <MaterialIcons name="remove" size={16} color={item.quantity <= 1 ? '#ccc' : theme.text} />
+                </TouchableOpacity>
+                <Text style={[styles.qtyText, { color: theme.text }]}>{item.quantity}</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleUpdateQuantity(item.variantId ?? item.productId, 1, item.quantity)}
+                  style={styles.qtyBtn}>
+                  <MaterialIcons name="add" size={16} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+
         {/* Tóm tắt đơn hàng */}
         <View style={[styles.section, { backgroundColor: theme.background }]}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Tóm tắt đơn hàng</Text>
@@ -537,4 +634,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  itemRow: { flexDirection: 'row', paddingVertical: 12, alignItems: 'center' },
+  itemImage: { width: 60, height: 60, borderRadius: 8, marginRight: 12, backgroundColor: '#f3f4f6' },
+  itemInfo: { flex: 1, marginRight: 12 },
+  itemName: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
+  itemWeight: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
+  itemPrice: { fontSize: 14, fontWeight: '600' },
+  qtyContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 6, borderWidth: 1, borderColor: '#e5e7eb' },
+  qtyBtn: { padding: 6 },
+  qtyText: { paddingHorizontal: 8, fontSize: 14, fontWeight: '500', minWidth: 24, textAlign: 'center' },
 });

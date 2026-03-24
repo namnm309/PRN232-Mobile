@@ -22,6 +22,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="product/[id]" options={{ title: 'Chi tiết sản phẩm' }} />
           <Stack.Screen name="profile-info" options={{ title: 'Thông tin cá nhân' }} />
           <Stack.Screen name="addresses" options={{ title: 'Địa chỉ giao hàng' }} />
           <Stack.Screen name="address-edit" options={{ title: 'Địa chỉ' }} />
