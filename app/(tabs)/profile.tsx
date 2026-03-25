@@ -34,6 +34,7 @@ export default function ProfileScreen() {
   const handleAddresses = () => router.push('/addresses');
   const handleOrders = () => router.push('/my-orders');
   const handleSupport = () => router.push('/support');
+  const handleAiChatbot = () => router.push('/ai-chatbot' as never);
   const handlePolicy = () => router.push('/policy');
   const handleNotifications = () => router.push('/notifications');
   const handleVoucherWallet = () => router.push('/voucher-wallet');
@@ -77,6 +78,12 @@ export default function ProfileScreen() {
       label: 'Thông báo',
       description: 'Thiết lập nhận thông báo',
       icon: 'bell.fill',
+    },
+    {
+      key: 'ai-chatbot',
+      label: 'Trợ lý AI',
+      description: 'Hỏi đáp sản phẩm với AI',
+      icon: 'paperplane.fill',
     },
     {
       key: 'support',
@@ -196,6 +203,8 @@ export default function ProfileScreen() {
             onPress={
               item.key === 'notification'
                 ? handleNotifications
+                : item.key === 'ai-chatbot'
+                  ? handleAiChatbot
                 : item.key === 'support'
                   ? handleSupport
                   : item.key === 'policy'

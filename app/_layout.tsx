@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 import { AuthProvider } from '@/context/AuthContext';
 import { CartProvider } from '@/context/CartContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AIChatbotFab } from '@/components/chatbot/AIChatbotFab';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -42,10 +43,12 @@ export default function RootLayout() {
           <Stack.Screen name="voucher-wallet" options={{ title: 'Ví voucher' }} />
           <Stack.Screen name="notifications" options={{ title: 'Thông báo' }} />
           <Stack.Screen name="support" options={{ title: 'Trung tâm hỗ trợ' }} />
+          <Stack.Screen name="ai-chatbot" options={{ title: 'Trợ lý AI' }} />
           <Stack.Screen name="policy" options={{ title: 'Điều khoản & Chính sách' }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style="auto" />
+        <AIChatbotFab />
         </CartProvider>
       </AuthProvider>
     </ThemeProvider>

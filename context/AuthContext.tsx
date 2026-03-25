@@ -18,6 +18,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = '@nongxanh:token';
 const USER_KEY = '@nongxanh:user';
+const AI_CHAT_KEY_PREFIX = '@nongxanh:ai-chat:';
 
 type AuthState = {
   user: UserDto | null;
@@ -47,6 +48,18 @@ async function persistAuth(data: AuthResponse) {
 
 async function clearAuth() {
   await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+}
+
+async function clearAiChatHistory() {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const chatKeys = keys.filter((k) => k.startsWith(AI_CHAT_KEY_PREFIX));
+    if (chatKeys.length > 0) {
+      await AsyncStorage.multiRemove(chatKeys);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -118,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await clearAuth();
+    await clearAiChatHistory();
     setState({ user: null, token: null, isLoading: false, isReady: true });
     router.replace('/(auth)/login');
   }, [router]);
